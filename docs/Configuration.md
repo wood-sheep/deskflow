@@ -120,6 +120,7 @@ This section contains options used by the application logging it will begin with
 | level    | Valid log level   | Log level to use |
 | toFile   | `true` or `false` | When true the log will be written to the value of the `file` option |
 | guiDebug | `true` or `false` | When true the log will show the Gui's internal debug messages |
+| gestureDiagnostics | `true` or `false` | When true log gesture capture, protocol forwarding, and shortcut injection details |
 
 ### Security
 

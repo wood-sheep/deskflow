@@ -93,6 +93,7 @@ public:
     inline static const auto Level = QStringLiteral("log/level");
     inline static const auto ToFile = QStringLiteral("log/toFile");
     inline static const auto GuiDebug = QStringLiteral("log/guiDebug");
+    inline static const auto GestureDiagnostics = QStringLiteral("log/gestureDiagnostics");
   };
   struct Security
   {
@@ -274,6 +275,7 @@ private:
     , Log::Level
     , Log::ToFile
     , Log::GuiDebug
+    , Log::GestureDiagnostics
     , Gui::Autohide
     , Gui::AutoStartCore
     , Gui::AutoUpdateCheck
@@ -325,6 +327,7 @@ private:
     , Client::InvertXScroll
     , Log::ToFile
     , Log::GuiDebug
+    , Log::GestureDiagnostics
     , Server::DefaultLockToComputerState
     , Server::DisableLockToComputer
     , Server::EnableHeatbeat

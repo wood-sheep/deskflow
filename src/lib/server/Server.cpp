@@ -10,6 +10,7 @@
 
 #include "base/IEventQueue.h"
 #include "base/Log.h"
+#include "common/Settings.h"
 #include "deskflow/AppUtil.h"
 #include "deskflow/DeskflowException.h"
 #include "deskflow/IPlatformScreen.h"
@@ -1884,6 +1885,12 @@ void Server::onMouseWheel(int32_t xDelta, int32_t yDelta)
 
 void Server::onGesture(const GestureEvent &event)
 {
+  LOGC(
+      Settings::value(Settings::Log::GestureDiagnostics).toBool(),
+      (CLOG_INFO "gesture.server received type=%d phase=%d fingers=%d delta=%d,%d sequence=%u active=%s",
+       static_cast<int>(event.type), static_cast<int>(event.phase), event.fingers, event.deltaX, event.deltaY,
+       event.sequence, m_active != nullptr ? getName(m_active).c_str() : "<none>")
+  );
   LOG_VERBOSE(
       "onGesture type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", static_cast<int>(event.type),
       static_cast<int>(event.phase), event.fingers, event.deltaX, event.deltaY, event.sequence

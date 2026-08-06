@@ -418,9 +418,19 @@
         </widget>
        </item>
        <item>
-        <widget class="QCheckBox" name="cbGuiDebug">
+       <widget class="QCheckBox" name="cbGuiDebug">
          <property name="text">
           <string>Enable GUI debug messages</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="cbGestureDiagnostics">
+         <property name="toolTip">
+          <string>Log gesture capture, protocol forwarding, and Windows shortcut injection</string>
+         </property>
+         <property name="text">
+          <string>Enable gesture diagnostics</string>
          </property>
         </widget>
        </item>

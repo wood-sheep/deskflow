@@ -11,6 +11,7 @@
 #include "base/IEventQueue.h"
 #include "base/Log.h"
 #include "client/Client.h"
+#include "common/Settings.h"
 #include "deskflow/Clipboard.h"
 #include "deskflow/ClipboardChunk.h"
 #include "deskflow/DeskflowException.h"
@@ -787,9 +788,10 @@ void ServerProxy::gesture()
       static_cast<GestureType>(type), static_cast<GesturePhase>(phase), static_cast<uint8_t>(fingers),
       static_cast<int16_t>(deltaX), static_cast<int16_t>(deltaY), static_cast<uint32_t>(sequence)
   };
-  LOG_VERBOSE(
-      "recv gesture type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", type, phase, fingers, deltaX, deltaY,
-      event.sequence
+  LOGC(
+      Settings::value(Settings::Log::GestureDiagnostics).toBool(),
+      (CLOG_INFO "gesture.protocol receive type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", type, phase,
+       fingers, deltaX, deltaY, event.sequence)
   );
   m_client->gesture(event);
 }

@@ -311,6 +311,12 @@ void Client::mouseWheel(int32_t xDelta, int32_t yDelta)
 
 void Client::gesture(const GestureEvent &event)
 {
+  LOGC(
+      Settings::value(Settings::Log::GestureDiagnostics).toBool(),
+      (CLOG_INFO "gesture.client dispatch type=%d phase=%d fingers=%d delta=%d,%d sequence=%u",
+       static_cast<int>(event.type), static_cast<int>(event.phase), event.fingers, event.deltaX, event.deltaY,
+       event.sequence)
+  );
   m_screen->gesture(event);
 }
 

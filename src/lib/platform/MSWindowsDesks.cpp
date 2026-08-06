@@ -13,6 +13,7 @@
 #include "base/IJob.h"
 #include "base/Log.h"
 #include "base/TMethodJob.h"
+#include "common/Settings.h"
 #include "deskflow/IScreenSaver.h"
 #include "deskflow/ScreenException.h"
 #include "deskflow/win32/AppUtilWindows.h"
@@ -326,6 +327,12 @@ void MSWindowsDesks::fakeMouseWheel(int32_t xDelta, int32_t yDelta) const
 
 void MSWindowsDesks::fakeGesture(const GestureEvent &event)
 {
+  LOGC(
+      Settings::value(Settings::Log::GestureDiagnostics).toBool(),
+      (CLOG_INFO "gesture.windows received type=%d phase=%d fingers=%d delta=%d,%d sequence=%u",
+       static_cast<int>(event.type), static_cast<int>(event.phase), event.fingers, event.deltaX, event.deltaY,
+       event.sequence)
+  );
   if (event.fingers != 3 || event.phase != GesturePhase::End) {
     return;
   }
@@ -522,6 +529,10 @@ void MSWindowsDesks::deskMouseRelativeMove(int32_t dx, int32_t dy) const
 
 void MSWindowsDesks::injectGesture(GestureType type)
 {
+  LOGC(
+      Settings::value(Settings::Log::GestureDiagnostics).toBool(),
+      (CLOG_INFO "gesture.windows inject type=%d", static_cast<int>(type))
+  );
   std::vector<std::pair<WORD, bool>> sequence;
   const auto appendKey = [&sequence](WORD key, bool down) { sequence.emplace_back(key, down); };
 
@@ -553,6 +564,10 @@ void MSWindowsDesks::injectGesture(GestureType type)
 
   for (const auto &[key, down] : sequence) {
     if (!send_keyboard_input(key, 0, down ? 0 : KEYEVENTF_KEYUP)) {
+      LOGC(
+          Settings::value(Settings::Log::GestureDiagnostics).toBool(),
+          (CLOG_ERR "gesture.windows SendInput failed key=0x%04x down=%d", key, down)
+      );
       releaseInjectedKeysOnDesk();
       return;
     }
@@ -566,6 +581,10 @@ void MSWindowsDesks::injectGesture(GestureType type)
 
 void MSWindowsDesks::releaseInjectedKeysOnDesk()
 {
+  LOGC(
+      Settings::value(Settings::Log::GestureDiagnostics).toBool(),
+      (CLOG_INFO "gesture.windows release keys count=%zu", m_injectedKeys.size())
+  );
   for (const auto key : m_injectedKeys) {
     send_keyboard_input(key, 0, KEYEVENTF_KEYUP);
   }
