@@ -13,6 +13,7 @@
 #include "deskflow/GestureTypes.h"
 
 #include <AppKit/NSEvent.h>
+#include <QDebug>
 
 #include <algorithm>
 #include <climits>
@@ -71,10 +72,11 @@ bool OSXGestureCapture::start()
 
   m_globalMonitor = (void *)globalMonitor;
   m_localMonitor = (void *)localMonitor;
-  LOGC(
-      Settings::value(Settings::Log::GestureDiagnostics).toBool(),
-      (CLOG_INFO "gesture.capture monitors installed global=%d local=%d", globalMonitor != nil, localMonitor != nil)
-  );
+  if (Settings::value(Settings::Log::GestureDiagnostics).toBool()) {
+    qInfo(
+        "gesture.capture monitors installed global=%d local=%d", globalMonitor != nil, localMonitor != nil
+    );
+  }
   return globalMonitor != nil || localMonitor != nil;
 }
 
@@ -108,18 +110,16 @@ void OSXGestureCapture::handleEvent(void *eventData)
     const auto deltaX = static_cast<int32_t>(event.deltaX);
     const auto deltaY = static_cast<int32_t>(event.deltaY);
     if (deltaX == 0 && deltaY == 0) {
-      LOGC(
-          Settings::value(Settings::Log::GestureDiagnostics).toBool(),
-          (CLOG_INFO "gesture.capture swipe ignored: no direction")
-      );
+      if (Settings::value(Settings::Log::GestureDiagnostics).toBool()) {
+        qInfo("gesture.capture swipe ignored: no direction");
+      }
       return;
     }
 
     ++m_sequence;
-    LOGC(
-        Settings::value(Settings::Log::GestureDiagnostics).toBool(),
-        (CLOG_INFO "gesture.capture swipe delta=%d,%d sequence=%u", deltaX, deltaY, m_sequence)
-    );
+    if (Settings::value(Settings::Log::GestureDiagnostics).toBool()) {
+      qInfo("gesture.capture swipe delta=%d,%d sequence=%u", deltaX, deltaY, m_sequence);
+    }
     emitGesture(
         static_cast<int>(typeForDelta(deltaX, deltaY)), static_cast<int>(GesturePhase::End), 3,
         static_cast<int16_t>(std::clamp(deltaX, INT16_MIN, INT16_MAX)),
@@ -178,11 +178,12 @@ void OSXGestureCapture::handleEvent(void *eventData)
 
 void OSXGestureCapture::emitGesture(int type, int phase, uint8_t fingers, int16_t deltaX, int16_t deltaY)
 {
-  LOGC(
-      Settings::value(Settings::Log::GestureDiagnostics).toBool(),
-      (CLOG_INFO "gesture.capture emit type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", type, phase, fingers,
-       deltaX, deltaY, m_sequence)
-  );
+  if (Settings::value(Settings::Log::GestureDiagnostics).toBool()) {
+    qInfo(
+        "gesture.capture emit type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", type, phase, fingers, deltaX,
+        deltaY, m_sequence
+    );
+  }
   const GestureEvent gesture{
       static_cast<GestureType>(type), static_cast<GesturePhase>(phase), fingers, deltaX, deltaY, m_sequence
   };
