@@ -69,6 +69,7 @@ public:
   void mouseMove(int32_t xAbs, int32_t yAbs) override = 0;
   void mouseRelativeMove(int32_t xRel, int32_t yRel) override = 0;
   void mouseWheel(int32_t xDelta, int32_t yDelta) override = 0;
+  void gesture(const GestureEvent &) override = 0;
   void screensaver(bool activate) override = 0;
   void resetOptions() override = 0;
   void setOptions(const OptionsList &options) override = 0;

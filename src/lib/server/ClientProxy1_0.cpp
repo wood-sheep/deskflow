@@ -305,6 +305,11 @@ void ClientProxy1_0::mouseWheel(int32_t, int32_t yDelta)
   ProtocolUtil::writef(getStream(), kMsgDMouseWheel1_0, yDelta);
 }
 
+void ClientProxy1_0::gesture(const GestureEvent &)
+{
+  // Gesture messages were added in protocol 1.9. Never send them to older clients.
+}
+
 void ClientProxy1_0::sendDragInfo(uint32_t, const char *, size_t)
 {
   // ignore -- not supported in protocol 1.0

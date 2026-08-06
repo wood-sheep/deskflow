@@ -45,7 +45,7 @@ static const int16_t kProtocolMajorVersion = 1;
  * @note When incrementing the minor version, the Deskflow application version should also increment
  * @since Protocol version 1.0
  */
-static const int16_t kProtocolMinorVersion = 8;
+static const int16_t kProtocolMinorVersion = 9;
 
 /**
  * @brief Default TCP port for Deskflow connections
@@ -862,6 +862,9 @@ extern const char *const kMsgDMouseWheel;
  * @since Protocol version 1.0
  */
 extern const char *const kMsgDMouseWheel1_0;
+
+/** Normalized gesture event, introduced in protocol version 1.9. */
+extern const char *const kMsgDGesture;
 
 /** @} */ // end of protocol_mouse group
 

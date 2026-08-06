@@ -23,7 +23,7 @@
 // Useful for debugging Windows specific bootstrapping code before the logging system is initialized.
 // This output can be viewed by attaching a Microsoft debugger or by using the DebugView program.
 #define MS_LOG_DEBUG(message, ...)                                                                                     \
-  OutputDebugStringA((deskflow::string::sprintf((s_binaryName + ": " + message + "\n").c_str(), __VA_ARGS__)).c_str())
+  OutputDebugStringA((deskflow::string::sprintf((s_binaryName + ": " + message + "\n").c_str() __VA_OPT__(, ) __VA_ARGS__)).c_str())
 
 //
 // Free functions

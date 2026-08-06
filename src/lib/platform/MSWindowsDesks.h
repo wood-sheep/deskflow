@@ -9,11 +9,13 @@
 #pragma once
 
 #include "deskflow/MouseTypes.h"
+#include "deskflow/GestureTypes.h"
 #include "deskflow/OptionTypes.h"
 #include "mt/CondVar.h"
 #include "mt/Mutex.h"
 
 #include <map>
+#include <set>
 #include <string>
 
 #define WIN32_LEAN_AND_MEAN
@@ -173,6 +175,12 @@ public:
   */
   void fakeMouseWheel(int32_t xDelta, int32_t yDelta) const;
 
+  //! Synthesize a normalized gesture as a Windows shortcut.
+  void fakeGesture(const GestureEvent &event);
+
+  //! Release any keys injected by the gesture shortcut path.
+  void releaseAllInjectedKeys();
+
   //@}
 
 private:
@@ -204,6 +212,8 @@ private:
   // message handlers
   void deskMouseMove(int32_t x, int32_t y) const;
   void deskMouseRelativeMove(int32_t dx, int32_t dy) const;
+  void injectGesture(GestureType type);
+  void releaseInjectedKeysOnDesk();
   void saveRelativeRestorePosition(Desk *desk) const;
   bool restoreRelativeCursorPosition(Desk *desk) const;
   void deskEnter(Desk *desk);
@@ -274,6 +284,7 @@ private:
   Mutex m_mutex;
   CondVar<bool> m_deskReady;
   Desks m_desks;
+  std::set<WORD> m_injectedKeys;
 
   // keyboard stuff
   IJob *m_updateKeys;

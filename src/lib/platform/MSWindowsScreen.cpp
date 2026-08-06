@@ -712,6 +712,11 @@ void MSWindowsScreen::fakeMouseWheel(ScrollDelta delta) const
   m_desks->fakeMouseWheel(delta.x, delta.y);
 }
 
+void MSWindowsScreen::fakeGesture(const GestureEvent &event)
+{
+  m_desks->fakeGesture(event);
+}
+
 void MSWindowsScreen::updateKeys()
 {
   m_desks->updateKeys();

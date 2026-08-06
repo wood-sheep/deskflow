@@ -22,6 +22,8 @@
 #include "platform/MSWindowsScreen.h"
 
 #include <malloc.h>
+#include <utility>
+#include <vector>
 
 // these are only defined when WINVER >= 0x0500
 #if !defined(SPI_GETMOUSESPEED)
@@ -80,17 +82,21 @@
 #define DESKFLOW_MSG_FAKE_REL_MOVE DESKFLOW_HOOK_LAST_MSG + 11
 // enable; <unused>
 #define DESKFLOW_MSG_FAKE_INPUT DESKFLOW_HOOK_LAST_MSG + 12
+// gesture type; gesture phase
+#define DESKFLOW_MSG_FAKE_GESTURE DESKFLOW_HOOK_LAST_MSG + 13
+// <unused>; <unused>
+#define DESKFLOW_MSG_RELEASE_INJECTED_KEYS DESKFLOW_HOOK_LAST_MSG + 14
 
-static void send_keyboard_input(WORD wVk, WORD wScan, DWORD dwFlags)
+static bool send_keyboard_input(WORD wVk, WORD wScan, DWORD dwFlags)
 {
-  INPUT inp;
+  INPUT inp{};
   inp.type = INPUT_KEYBOARD;
   inp.ki.wVk = (dwFlags & KEYEVENTF_UNICODE) ? 0 : wVk; // 1..254 inclusive otherwise
   inp.ki.wScan = wScan;
   inp.ki.dwFlags = dwFlags & 0xF;
   inp.ki.time = 0;
   inp.ki.dwExtraInfo = 0;
-  SendInput(1, &inp, sizeof(inp));
+  return SendInput(1, &inp, sizeof(inp)) == 1;
 }
 
 static void send_mouse_input(DWORD dwFlags, DWORD dx, DWORD dy, DWORD dwData)
@@ -155,6 +161,8 @@ void MSWindowsDesks::enable()
 
 void MSWindowsDesks::disable()
 {
+  releaseAllInjectedKeys();
+
   // remove timer
   if (m_timer != nullptr) {
     m_events->removeHandler(EventTypes::Timer, m_timer);
@@ -175,6 +183,7 @@ void MSWindowsDesks::enter()
 
 void MSWindowsDesks::leave(HKL keyLayout)
 {
+  releaseAllInjectedKeys();
   sendMessage(DESKFLOW_MSG_LEAVE, (WPARAM)keyLayout, 0);
 }
 
@@ -313,6 +322,21 @@ void MSWindowsDesks::fakeMouseRelativeMove(int32_t dx, int32_t dy) const
 void MSWindowsDesks::fakeMouseWheel(int32_t xDelta, int32_t yDelta) const
 {
   sendMessage(DESKFLOW_MSG_FAKE_WHEEL, xDelta, yDelta);
+}
+
+void MSWindowsDesks::fakeGesture(const GestureEvent &event)
+{
+  if (event.fingers != 3 || event.phase != GesturePhase::End) {
+    return;
+  }
+  sendMessage(
+      DESKFLOW_MSG_FAKE_GESTURE, static_cast<WPARAM>(event.type), static_cast<LPARAM>(event.phase)
+  );
+}
+
+void MSWindowsDesks::releaseAllInjectedKeys()
+{
+  sendMessage(DESKFLOW_MSG_RELEASE_INJECTED_KEYS, 0, 0);
 }
 
 void MSWindowsDesks::saveRelativeRestorePosition(Desk *desk) const
@@ -494,6 +518,58 @@ void MSWindowsDesks::deskMouseRelativeMove(int32_t dx, int32_t dy) const
     SystemParametersInfo(SPI_SETMOUSE, 0, oldSpeed, 0);
     SystemParametersInfo(SPI_SETMOUSESPEED, 0, oldSpeed + 3, 0);
   }
+}
+
+void MSWindowsDesks::injectGesture(GestureType type)
+{
+  std::vector<std::pair<WORD, bool>> sequence;
+  const auto appendKey = [&sequence](WORD key, bool down) { sequence.emplace_back(key, down); };
+
+  switch (type) {
+  case GestureType::SwipeLeft:
+  case GestureType::SwipeRight:
+    appendKey(VK_LMENU, true);
+    appendKey(VK_TAB, true);
+    appendKey(VK_TAB, false);
+    appendKey(type == GestureType::SwipeLeft ? VK_LEFT : VK_RIGHT, true);
+    appendKey(type == GestureType::SwipeLeft ? VK_LEFT : VK_RIGHT, false);
+    appendKey(VK_LMENU, false);
+    break;
+
+  case GestureType::SwipeUp:
+    appendKey(VK_LWIN, true);
+    appendKey(VK_TAB, true);
+    appendKey(VK_TAB, false);
+    appendKey(VK_LWIN, false);
+    break;
+
+  case GestureType::SwipeDown:
+    appendKey(VK_LWIN, true);
+    appendKey('D', true);
+    appendKey('D', false);
+    appendKey(VK_LWIN, false);
+    break;
+  }
+
+  for (const auto &[key, down] : sequence) {
+    if (!send_keyboard_input(key, 0, down ? 0 : KEYEVENTF_KEYUP)) {
+      releaseInjectedKeysOnDesk();
+      return;
+    }
+    if (down) {
+      m_injectedKeys.insert(key);
+    } else {
+      m_injectedKeys.erase(key);
+    }
+  }
+}
+
+void MSWindowsDesks::releaseInjectedKeysOnDesk()
+{
+  for (const auto key : m_injectedKeys) {
+    send_keyboard_input(key, 0, KEYEVENTF_KEYUP);
+  }
+  m_injectedKeys.clear();
 }
 
 /*!
@@ -780,6 +856,16 @@ void MSWindowsDesks::deskThread(const void *vdesk)
           DESKFLOW_HOOK_FAKE_INPUT_VIRTUAL_KEY, DESKFLOW_HOOK_FAKE_INPUT_SCANCODE, msg.wParam ? 0 : KEYEVENTF_KEYUP
       );
       break;
+
+    case DESKFLOW_MSG_FAKE_GESTURE:
+      if (msg.lParam == static_cast<LPARAM>(GesturePhase::End)) {
+        injectGesture(static_cast<GestureType>(msg.wParam));
+      }
+      break;
+
+    case DESKFLOW_MSG_RELEASE_INJECTED_KEYS:
+      releaseInjectedKeysOnDesk();
+      break;
     }
 
     // notify that message was processed
@@ -846,6 +932,8 @@ void MSWindowsDesks::checkDesk()
   // which would have the side effect of forcing the screensaver to
   // stop.
   if (name != m_activeDeskName && !m_screensaver->isActive()) {
+    releaseAllInjectedKeys();
+
     // show cursor on previous desk
     bool wasOnScreen = m_isOnScreen;
     if (!wasOnScreen) {

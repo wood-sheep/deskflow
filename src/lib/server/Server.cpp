@@ -90,6 +90,9 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Scr
   m_events->addHandler(EventTypes::PrimaryScreenWheel, m_primaryClient->getEventTarget(), [this](const auto &e) {
     handleWheelEvent(e);
   });
+  m_events->addHandler(EventTypes::PrimaryScreenGesture, m_primaryClient->getEventTarget(), [this](const auto &e) {
+    handleGestureEvent(e);
+  });
   m_events->addHandler(
       EventTypes::PrimaryScreenSaverActivated, m_primaryClient->getEventTarget(),
       [this](const auto &) { onScreensaver(true); }
@@ -153,6 +156,7 @@ Server::~Server()
   m_events->removeHandler(PrimaryScreenMotionOnPrimary, m_primaryClient->getEventTarget());
   m_events->removeHandler(PrimaryScreenMotionOnSecondary, m_primaryClient->getEventTarget());
   m_events->removeHandler(PrimaryScreenWheel, m_primaryClient->getEventTarget());
+  m_events->removeHandler(PrimaryScreenGesture, m_primaryClient->getEventTarget());
   m_events->removeHandler(PrimaryScreenSaverActivated, m_primaryClient->getEventTarget());
   m_events->removeHandler(PrimaryScreenSaverDeactivated, m_primaryClient->getEventTarget());
   m_events->removeHandler(PrimaryScreenFakeInputBegin, m_inputFilter);
@@ -1259,6 +1263,12 @@ void Server::handleWheelEvent(const Event &event)
   onMouseWheel(info->m_xDelta, info->m_yDelta);
 }
 
+void Server::handleGestureEvent(const Event &event)
+{
+  const auto *info = static_cast<const GestureEvent *>(event.getData());
+  onGesture(*info);
+}
+
 void Server::handleSwitchWaitTimeout()
 {
   // ignore if mouse is locked to screen
@@ -1870,6 +1880,18 @@ void Server::onMouseWheel(int32_t xDelta, int32_t yDelta)
 
   // relay
   m_active->mouseWheel(xDelta, yDelta);
+}
+
+void Server::onGesture(const GestureEvent &event)
+{
+  LOG_VERBOSE(
+      "onGesture type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", static_cast<int>(event.type),
+      static_cast<int>(event.phase), event.fingers, event.deltaX, event.deltaY, event.sequence
+  );
+  assert(m_active != nullptr);
+  if (m_active != m_primaryClient && event.fingers == 3) {
+    m_active->gesture(event);
+  }
 }
 
 bool Server::addClient(BaseClientProxy *client)

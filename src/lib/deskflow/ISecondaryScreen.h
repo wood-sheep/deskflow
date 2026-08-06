@@ -11,6 +11,7 @@
 #include "common/Coordinate.h"
 #include "common/Settings.h"
 #include "deskflow/MouseTypes.h"
+#include "deskflow/GestureTypes.h"
 
 //! Secondary screen interface
 /*!
@@ -56,6 +57,12 @@ public:
    * @param delta the raw delta to fake
    */
   virtual void fakeMouseWheel(ScrollDelta delta) const = 0;
+
+  //! Synthesize a normalized gesture. Platforms without gesture synthesis ignore it.
+  virtual void fakeGesture(const GestureEvent &)
+  {
+    // do nothing
+  }
 
   /**
    * @brief Applies any scroll modfifers to the provided delta, This should only be done inside the subclasses

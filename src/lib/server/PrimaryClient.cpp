@@ -191,6 +191,11 @@ void PrimaryClient::mouseWheel(int32_t, int32_t)
   // ignore
 }
 
+void PrimaryClient::gesture(const GestureEvent &)
+{
+  // The primary screen is the gesture source, not a gesture destination.
+}
+
 void PrimaryClient::screensaver(bool)
 {
   // ignore

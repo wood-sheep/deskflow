@@ -270,6 +270,12 @@ void Screen::mouseWheel(int32_t xDelta, int32_t yDelta) const
   m_screen->fakeMouseWheel({xDelta, yDelta});
 }
 
+void Screen::gesture(const GestureEvent &event)
+{
+  assert(!m_isPrimary);
+  m_screen->fakeGesture(event);
+}
+
 void Screen::resetOptions()
 {
   // reset options

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "deskflow/ClipboardTypes.h"
+#include "deskflow/GestureTypes.h"
 #include "deskflow/IScreen.h"
 #include "deskflow/KeyTypes.h"
 #include "deskflow/MouseTypes.h"
@@ -126,6 +127,9 @@ public:
   Each wheel click should generate a delta of +/-120.
   */
   virtual void mouseWheel(int32_t xDelta, int32_t yDelta) = 0;
+
+  //! Notify of a normalized multi-touch gesture.
+  virtual void gesture(const GestureEvent &) = 0;
 
   //! Notify of screen saver change
   virtual void screensaver(bool activate) = 0;

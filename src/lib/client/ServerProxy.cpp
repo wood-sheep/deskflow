@@ -22,6 +22,7 @@
 #include "io/IStream.h"
 
 #include <cstring>
+#include <climits>
 
 //
 // ServerProxy
@@ -219,6 +220,10 @@ ServerProxy::ConnectionResult ServerProxy::parseMessage(const uint8_t *code)
 
   else if (memcmp(code, kMsgDMouseWheel, 4) == 0) {
     mouseWheel();
+  }
+
+  else if (memcmp(code, kMsgDGesture, 4) == 0) {
+    gesture();
   }
 
   else if (memcmp(code, kMsgDKeyDown, 4) == 0) {
@@ -756,6 +761,37 @@ void ServerProxy::mouseWheel()
 
   // forward
   m_client->mouseWheel(xDelta, yDelta);
+}
+
+void ServerProxy::gesture()
+{
+  flushCompressedMouse();
+
+  int32_t type;
+  int32_t phase;
+  int32_t fingers;
+  int32_t deltaX;
+  int32_t deltaY;
+  int32_t sequence;
+  ProtocolUtil::readf(m_stream, kMsgDGesture + 4, &type, &phase, &fingers, &deltaX, &deltaY, &sequence);
+
+  if (type < static_cast<int32_t>(GestureType::SwipeLeft) ||
+      type > static_cast<int32_t>(GestureType::SwipeDown) ||
+      phase < static_cast<int32_t>(GesturePhase::Begin) ||
+      phase > static_cast<int32_t>(GesturePhase::Cancel) || fingers < 0 || fingers > 255 || deltaX < INT16_MIN ||
+      deltaX > INT16_MAX || deltaY < INT16_MIN || deltaY > INT16_MAX) {
+    throw BadClientException();
+  }
+
+  GestureEvent event{
+      static_cast<GestureType>(type), static_cast<GesturePhase>(phase), static_cast<uint8_t>(fingers),
+      static_cast<int16_t>(deltaX), static_cast<int16_t>(deltaY), static_cast<uint32_t>(sequence)
+  };
+  LOG_VERBOSE(
+      "recv gesture type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", type, phase, fingers, deltaX, deltaY,
+      event.sequence
+  );
+  m_client->gesture(event);
 }
 
 void ServerProxy::screensaver()

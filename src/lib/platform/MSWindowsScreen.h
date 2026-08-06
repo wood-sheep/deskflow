@@ -9,6 +9,7 @@
 #pragma once
 
 #include "deskflow/PlatformScreen.h"
+#include "deskflow/GestureTypes.h"
 #include "platform/MSWindowsHook.h"
 #include "platform/MSWindowsPowerManager.h"
 
@@ -97,6 +98,7 @@ public:
   void fakeMouseMove(int32_t x, int32_t y) override;
   void fakeMouseRelativeMove(int32_t dx, int32_t dy) const override;
   void fakeMouseWheel(ScrollDelta delta) const override;
+  void fakeGesture(const GestureEvent &event) override;
 
   // IKeyState overrides
   virtual void updateKeys();

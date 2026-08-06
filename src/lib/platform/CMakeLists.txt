@@ -86,6 +86,8 @@ elseif(APPLE)
     OSXEventQueueBuffer.h
     OSXKeyState.cpp
     OSXKeyState.h
+    OSXGestureCapture.h
+    OSXGestureCapture.mm
     OSXMediaKeySupport.h
     OSXMediaKeySupport.m
     OSXPasteboardPeeker.h

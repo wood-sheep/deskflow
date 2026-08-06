@@ -47,6 +47,7 @@
 #include "platform/OSXScreen.h"
 #endif
 
+#include <filesystem>
 #include <fstream>
 
 using namespace deskflow::server;
@@ -115,7 +116,7 @@ bool ServerApp::loadConfig(const QString &filename)
     // load configuration
     LOG_DEBUG("opening configuration \"%s\"", path.c_str());
 #if defined(Q_OS_WIN)
-    std::ifstream configStream(filename.toStdWString());
+    std::ifstream configStream(std::filesystem::path(filename.toStdWString()));
 #else
     std::ifstream configStream(path);
 #endif

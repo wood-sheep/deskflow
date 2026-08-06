@@ -35,6 +35,7 @@ const char *const kMsgDMouseMove = "DMMV%2i%2i";
 const char *const kMsgDMouseRelMove = "DMRM%2i%2i";
 const char *const kMsgDMouseWheel = "DMWM%2i%2i";
 const char *const kMsgDMouseWheel1_0 = "DMWM%2i";
+const char *const kMsgDGesture = "DGST%1i%1i%1i%2i%2i%4i";
 const char *const kMsgDClipboard = "DCLP%1i%4i%1i%s";
 const char *const kMsgDInfo = "DINF%2i%2i%2i%2i%2i%2i%2i";
 const char *const kMsgDSetOptions = "DSOP%4I";

@@ -184,6 +184,9 @@ enum class EventTypes : uint32_t
   /// This event is sent when mouse wheel is rotated. Event data is a pointer to WheelInfo.
   PrimaryScreenWheel,
 
+  /// This event is sent when a normalized gesture is recognized. Event data is a pointer to GestureEvent.
+  PrimaryScreenGesture,
+
   /// This event is sent when screensaver is activated.
   PrimaryScreenSaverActivated,
 
