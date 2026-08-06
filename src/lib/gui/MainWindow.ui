@@ -512,6 +512,16 @@
          </layout>
         </widget>
        </item>
+       <item>
+        <widget class="QCheckBox" name="cbGestureDiagnostics">
+         <property name="toolTip">
+          <string>Log gesture capture, protocol forwarding, and Windows shortcut injection</string>
+         </property>
+         <property name="text">
+          <string>Enable gesture diagnostics</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
     </item>

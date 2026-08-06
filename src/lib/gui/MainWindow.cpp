@@ -208,7 +208,8 @@ void MainWindow::setupControls()
     Settings::setValue(Settings::Core::LastVersion, kVersion);
   }
 
-  if (!Settings::value(Settings::Gui::LogExpanded).toBool()) {
+  const bool gestureDiagnostics = Settings::value(Settings::Log::GestureDiagnostics).toBool();
+  if (!Settings::value(Settings::Gui::LogExpanded).toBool() && !gestureDiagnostics) {
     m_logDock->hide();
   }
 
@@ -218,6 +219,8 @@ void MainWindow::setupControls()
   const auto coreMode = Settings::value(Settings::Core::CoreMode).value<Settings::CoreMode>();
   ui->rbModeClient->setChecked(coreMode == Settings::CoreMode::Client);
   ui->rbModeServer->setChecked(coreMode == Settings::CoreMode::Server);
+  ui->cbGestureDiagnostics->setChecked(gestureDiagnostics);
+  ui->cbGestureDiagnostics->setEnabled(Settings::isWritable());
 
   ui->lineEditName->setValidator(new QRegularExpressionValidator(m_nameRegEx, this));
   ui->lineEditName->setVisible(false);
@@ -300,6 +303,13 @@ void MainWindow::connectSlots()
 
   connect(ui->rbModeServer, &QRadioButton::toggled, this, &MainWindow::coreModeToggled);
   connect(ui->rbModeClient, &QRadioButton::toggled, this, &MainWindow::coreModeToggled);
+  connect(ui->cbGestureDiagnostics, &QCheckBox::toggled, this, [this](bool enabled) {
+    Settings::setValue(Settings::Log::GestureDiagnostics, enabled);
+    if (enabled) {
+      m_logDock->show();
+      toggleLogVisible(true);
+    }
+  });
 
   connect(m_logDock->toggleViewAction(), &QAction::toggled, this, &MainWindow::toggleLogVisible);
 
