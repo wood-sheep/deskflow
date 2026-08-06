@@ -8,6 +8,7 @@
 #include "base/Event.h"
 #include "base/EventTypes.h"
 #include "base/IEventQueue.h"
+#include "base/Log.h"
 #include "deskflow/GestureTypes.h"
 
 #include <AppKit/NSEvent.h>
@@ -64,6 +65,9 @@ bool OSXGestureCapture::start()
 
   m_globalMonitor = (void *)globalMonitor;
   m_localMonitor = (void *)localMonitor;
+  if (globalMonitor != nil || localMonitor != nil) {
+    LOG_INFO("installed macOS AppKit gesture monitors");
+  }
   return globalMonitor != nil || localMonitor != nil;
 }
 
@@ -87,8 +91,31 @@ void OSXGestureCapture::stop()
 void OSXGestureCapture::handleEvent(void *eventData)
 {
   auto *event = (NSEvent *)eventData;
-  const auto fingers = countTouches(event);
   const auto type = event.type;
+
+  // AppKit deliberately does not expose the touch collection to a global
+  // monitor. NSEventTypeSwipe is already the system's classified swipe
+  // gesture, so treating it as a three-finger gesture avoids dropping every
+  // event because touchesMatchingPhase: returns an empty set outside a view.
+  if (type == NSEventTypeSwipe) {
+    const auto deltaX = static_cast<int32_t>(event.deltaX);
+    const auto deltaY = static_cast<int32_t>(event.deltaY);
+    if (deltaX == 0 && deltaY == 0) {
+      LOG_DEBUG("ignoring macOS swipe with no direction");
+      return;
+    }
+
+    ++m_sequence;
+    LOG_VERBOSE("macOS swipe gesture delta=%d,%d", deltaX, deltaY);
+    emitGesture(
+        static_cast<int>(typeForDelta(deltaX, deltaY)), static_cast<int>(GesturePhase::End), 3,
+        static_cast<int16_t>(std::clamp(deltaX, INT16_MIN, INT16_MAX)),
+        static_cast<int16_t>(std::clamp(deltaY, INT16_MIN, INT16_MAX))
+    );
+    return;
+  }
+
+  const auto fingers = countTouches(event);
 
   if (type == NSEventTypeBeginGesture) {
     m_tracking = fingers == 3;
@@ -122,26 +149,6 @@ void OSXGestureCapture::handleEvent(void *eventData)
     m_fingers = 0;
     m_deltaX = 0;
     m_deltaY = 0;
-    return;
-  }
-
-  if (type == NSEventTypeSwipe) {
-    if (fingers != 3) {
-      return;
-    }
-
-    const auto deltaX = static_cast<int32_t>(event.deltaX);
-    const auto deltaY = static_cast<int32_t>(event.deltaY);
-    if (std::abs(deltaX) < kSwipeThreshold && std::abs(deltaY) < kSwipeThreshold) {
-      return;
-    }
-
-    ++m_sequence;
-    emitGesture(
-        static_cast<int>(typeForDelta(deltaX, deltaY)), static_cast<int>(GesturePhase::End), fingers,
-        static_cast<int16_t>(std::clamp(deltaX, INT16_MIN, INT16_MAX)),
-        static_cast<int16_t>(std::clamp(deltaY, INT16_MIN, INT16_MAX))
-    );
     return;
   }
 
