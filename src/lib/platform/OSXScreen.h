@@ -37,7 +37,6 @@ class Mutex;
 class Thread;
 class OSXKeyState;
 class OSXScreenSaver;
-class OSXGestureCapture;
 class IEventQueue;
 class Mutex;
 
@@ -312,7 +311,6 @@ private:
 
   IEventQueue *m_events;
 
-  std::unique_ptr<OSXGestureCapture> m_gestureCapture;
 
   std::unique_ptr<Thread> m_getDropTargetThread;
   std::string m_dropTarget;

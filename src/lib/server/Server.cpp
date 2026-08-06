@@ -20,6 +20,7 @@
 #include "deskflow/Screen.h"
 #include "deskflow/StreamChunker.h"
 #include "deskflow/ipc/CoreIpc.h"
+#include "deskflow/ipc/CoreIpcServer.h"
 #include "net/TCPSocket.h"
 #include "server/ClientListener.h"
 #include "server/ClientProxy.h"
@@ -53,6 +54,19 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Scr
   assert(m_primaryClient != nullptr);
   assert(config.isScreen(primaryClient->getName()));
   assert(m_screen != nullptr);
+
+  QObject::connect(
+      &deskflow::core::ipc::CoreIpcServer::instance(),
+      &deskflow::core::ipc::CoreIpcServer::gestureReceived,
+      [this](int type, int phase, int fingers, int deltaX, int deltaY, uint32_t sequence) {
+        auto *gesture = static_cast<GestureEvent *>(malloc(sizeof(GestureEvent)));
+        *gesture = {
+            static_cast<GestureType>(type), static_cast<GesturePhase>(phase), static_cast<uint8_t>(fingers),
+            static_cast<int16_t>(deltaX), static_cast<int16_t>(deltaY), sequence
+        };
+        m_events->addEvent(Event(EventTypes::PrimaryScreenGesture, m_primaryClient->getEventTarget(), gesture));
+      }
+  );
 
   std::string primaryName = getName(primaryClient);
 

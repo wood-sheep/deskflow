@@ -7,6 +7,7 @@
 #pragma once
 
 #include "IpcClient.h"
+#include "deskflow/GestureTypes.h"
 
 #include <QObject>
 
@@ -20,6 +21,7 @@ public:
   explicit CoreIpcClient(QObject *parent = nullptr);
 
   void sendStop();
+  void sendGesture(const GestureEvent &event);
 
 Q_SIGNALS:
   void commandReceived(const QString &command, const QString &args);

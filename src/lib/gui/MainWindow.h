@@ -14,6 +14,7 @@
 #include <QRegularExpression>
 #include <QSystemTrayIcon>
 #include <QUrl>
+#include <memory>
 
 #include "VersionChecker.h"
 #include "config/ServerConfig.h"
@@ -22,6 +23,7 @@
 #include "net/Fingerprint.h"
 
 #ifdef Q_OS_MACOS
+#include "deskflow/GestureTypes.h"
 #include "gui/OSXHelpers.h"
 #endif
 
@@ -32,6 +34,10 @@ class QLocalServer;
 class DeskflowApplication;
 class LogDock;
 class StatusBar;
+
+#ifdef Q_OS_MACOS
+class OSXGestureCapture;
+#endif
 
 namespace Ui {
 class MainWindow;
@@ -145,6 +151,12 @@ private:
   void setHelpFilePath();
   void showHelpViewer() const;
 
+#ifdef Q_OS_MACOS
+  void startGestureCapture();
+  void stopGestureCapture();
+  void handleGesture(const GestureEvent &event);
+#endif
+
   bool canRunCore() const;
 
   /**
@@ -172,6 +184,9 @@ private:
   bool m_clientErrorVisible = false;
   ServerConfig m_serverConfig;
   deskflow::gui::CoreProcess m_coreProcess;
+#ifdef Q_OS_MACOS
+  std::unique_ptr<OSXGestureCapture> m_gestureCapture;
+#endif
   QSet<QString> m_ignoredClients;
   bool m_newClientPromptShowing = false;
   bool m_serverConfigDialogVisible = false;

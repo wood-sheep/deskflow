@@ -210,6 +210,16 @@ void CoreProcess::applyLogLevel()
   }
 }
 
+bool CoreProcess::sendGesture(const GestureEvent &event)
+{
+  if (m_coreIpcClient == nullptr || !m_coreIpcClient->isConnected()) {
+    return false;
+  }
+
+  m_coreIpcClient->sendGesture(event);
+  return true;
+}
+
 void CoreProcess::startForegroundProcess(const QStringList &args)
 {
   using enum ProcessState;

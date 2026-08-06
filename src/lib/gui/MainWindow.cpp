@@ -24,15 +24,20 @@
 #include "common/Settings.h"
 #include "common/UrlConstants.h"
 #include "common/VersionInfo.h"
+#include "deskflow/GestureTypes.h"
 #include "gui/Messages.h"
 #include "gui/TlsUtility.h"
 #include "gui/core/CoreProcess.h"
 #include "gui/ipc/DaemonIpcClient.h"
+#ifdef Q_OS_MACOS
+#include "platform/OSXGestureCapture.h"
+#endif
 #include "gui/widgets/LogDock.h"
 #include "net/FingerprintDatabase.h"
 #include "widgets/StatusBar.h"
 
 #include <QCheckBox>
+#include <QDateTime>
 #include <QCloseEvent>
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -167,6 +172,10 @@ MainWindow::MainWindow()
 }
 MainWindow::~MainWindow()
 {
+#ifdef Q_OS_MACOS
+  stopGestureCapture();
+#endif
+
   // Stop network monitoring
   if (m_networkMonitor) {
     m_networkMonitor->stopMonitoring();
@@ -416,6 +425,59 @@ void MainWindow::coreProcessError(CoreProcess::Error error)
   }
 }
 
+#ifdef Q_OS_MACOS
+void MainWindow::startGestureCapture()
+{
+  if (m_gestureCapture != nullptr) {
+    return;
+  }
+
+  m_gestureCapture = std::make_unique<OSXGestureCapture>([this](const GestureEvent &event) {
+    handleGesture(event);
+  });
+  if (!m_gestureCapture->start()) {
+    m_logDock->appendLine(QStringLiteral("gesture.capture failed to install GUI AppKit monitors"));
+    m_gestureCapture.reset();
+    return;
+  }
+
+  if (Settings::value(Settings::Log::GestureDiagnostics).toBool()) {
+    m_logDock->appendLine(QStringLiteral("gesture.capture monitors installed in GUI process"));
+  }
+}
+
+void MainWindow::stopGestureCapture()
+{
+  if (m_gestureCapture == nullptr) {
+    return;
+  }
+
+  m_gestureCapture->stop();
+  m_gestureCapture.reset();
+}
+
+void MainWindow::handleGesture(const GestureEvent &event)
+{
+  if (Settings::value(Settings::Log::GestureDiagnostics).toBool()) {
+    const auto timestamp = QDateTime::currentDateTime().toString(Qt::ISODateWithMs);
+    m_logDock->appendLine(
+        QStringLiteral("[%1] INFO: gesture.capture GUI event type=%2 phase=%3 fingers=%4 delta=%5,%6 sequence=%7")
+            .arg(timestamp)
+            .arg(static_cast<int>(event.type))
+            .arg(static_cast<int>(event.phase))
+            .arg(event.fingers)
+            .arg(event.deltaX)
+            .arg(event.deltaY)
+            .arg(event.sequence)
+    );
+  }
+
+  if (!m_coreProcess.sendGesture(event) && Settings::value(Settings::Log::GestureDiagnostics).toBool()) {
+    m_logDock->appendLine(QStringLiteral("gesture.protocol GUI could not send gesture to core IPC"));
+  }
+}
+#endif
+
 void MainWindow::startCore()
 {
   // Save current IP state when server starts
@@ -427,11 +489,19 @@ void MainWindow::startCore()
   m_actionStartCore->setVisible(false);
   m_actionRestartCore->setVisible(true);
   m_coreProcess.start();
+#ifdef Q_OS_MACOS
+  if (m_coreProcess.mode() == CoreMode::Server) {
+    startGestureCapture();
+  }
+#endif
 }
 
 void MainWindow::stopCore()
 {
   qDebug() << "stopping core process";
+#ifdef Q_OS_MACOS
+  stopGestureCapture();
+#endif
   m_coreProcess.stop();
   m_actionStartCore->setVisible(true);
   m_actionRestartCore->setVisible(false);
@@ -525,8 +595,12 @@ void MainWindow::coreModeToggled(bool checked)
 
   qDebug() << QStringLiteral("change mode to: %1").arg(QVariant::fromValue(mode).toString());
 
-  if (m_coreProcess.isStarted() && m_coreProcess.mode() != mode)
+  if (m_coreProcess.isStarted() && m_coreProcess.mode() != mode) {
+#ifdef Q_OS_MACOS
+    stopGestureCapture();
+#endif
     m_coreProcess.stop();
+  }
   m_coreProcess.setMode(mode);
 
   Settings::setValue(Settings::Core::CoreMode, mode);

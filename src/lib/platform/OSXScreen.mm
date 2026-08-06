@@ -30,7 +30,6 @@
 #include "platform/OSXEventQueueBuffer.h"
 #include "platform/OSXKeyState.h"
 #include "platform/OSXMediaKeySupport.h"
-#include "platform/OSXGestureCapture.h"
 #include "platform/OSXPasteboardPeeker.h"
 #include "platform/OSXScreenSaver.h"
 
@@ -707,11 +706,6 @@ void OSXScreen::enable()
         kCGHIDEventTap, kCGHeadInsertEventTap, kCGEventTapOptionDefault, kCGEventMaskForAllEvents, handleCGInputEvent,
         this
     );
-    m_gestureCapture = std::make_unique<OSXGestureCapture>(m_events, getEventTarget());
-    if (!m_gestureCapture->start()) {
-      LOG_WARN("failed to install macOS gesture monitors");
-      m_gestureCapture.reset();
-    }
   } else {
     // FIXME -- prevent system from entering power save mode
 
@@ -757,11 +751,6 @@ void OSXScreen::enable()
 void OSXScreen::disable()
 {
   showCursor();
-
-  if (m_gestureCapture != nullptr) {
-    m_gestureCapture->stop();
-    m_gestureCapture.reset();
-  }
 
   // FIXME -- stop watching jump zones, stop capturing input
 

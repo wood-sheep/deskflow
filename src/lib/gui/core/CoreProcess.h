@@ -9,6 +9,7 @@
 
 #include "common/Enums.h"
 #include "common/Settings.h"
+#include "deskflow/GestureTypes.h"
 #include "gui/FileTail.h"
 #include "gui/config/ServerConfig.h"
 
@@ -47,6 +48,7 @@ public:
   void applyLogLevel();
   void clearSettings();
   void retryDaemon();
+  bool sendGesture(const GestureEvent &event);
 
   // getters
   Settings::CoreMode mode() const

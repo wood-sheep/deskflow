@@ -10,6 +10,7 @@
 
 #include <QObject>
 #include <QSet>
+#include <cstdint>
 
 class QLocalSocket;
 
@@ -23,6 +24,9 @@ public:
   explicit CoreIpcServer(QObject *parent);
 
   static CoreIpcServer &instance();
+
+Q_SIGNALS:
+  void gestureReceived(int type, int phase, int fingers, int deltaX, int deltaY, uint32_t sequence);
 
 private:
   void processCommand(QLocalSocket *clientSocket, const QString &command, const QStringList &parts) override;

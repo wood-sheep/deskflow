@@ -25,6 +25,18 @@ void CoreIpcClient::sendStop()
   sendMessage(QStringLiteral("stop"));
 }
 
+void CoreIpcClient::sendGesture(const GestureEvent &event)
+{
+  const auto args = QStringLiteral("%1,%2,%3,%4,%5,%6")
+                        .arg(static_cast<int>(event.type))
+                        .arg(static_cast<int>(event.phase))
+                        .arg(event.fingers)
+                        .arg(event.deltaX)
+                        .arg(event.deltaY)
+                        .arg(event.sequence);
+  sendMessage(QStringLiteral("gesture=%1").arg(args));
+}
+
 void CoreIpcClient::processCommand(const QString &command, const QStringList &parts)
 {
   const auto args = parts.size() >= 2 ? parts.at(1) : QString();

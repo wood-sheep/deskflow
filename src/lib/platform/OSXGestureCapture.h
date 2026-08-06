@@ -5,7 +5,10 @@
 
 #pragma once
 
+#include "deskflow/GestureTypes.h"
+
 #include <cstdint>
+#include <functional>
 
 class IEventQueue;
 
@@ -13,7 +16,10 @@ class IEventQueue;
 class OSXGestureCapture
 {
 public:
+  using GestureHandler = std::function<void(const GestureEvent &)>;
+
   OSXGestureCapture(IEventQueue *events, void *eventTarget);
+  explicit OSXGestureCapture(GestureHandler handler);
   OSXGestureCapture(OSXGestureCapture const &) = delete;
   OSXGestureCapture(OSXGestureCapture &&) = delete;
   ~OSXGestureCapture();
@@ -30,6 +36,7 @@ private:
 
   IEventQueue *m_events = nullptr;
   void *m_eventTarget = nullptr;
+  GestureHandler m_handler;
   void *m_globalMonitor = nullptr;
   void *m_localMonitor = nullptr;
   bool m_tracking = false;

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstdlib>
+#include <utility>
 
 namespace
 {
@@ -40,6 +41,10 @@ GestureType typeForDelta(int32_t deltaX, int32_t deltaY)
 OSXGestureCapture::OSXGestureCapture(IEventQueue *events, void *eventTarget)
     : m_events(events),
       m_eventTarget(eventTarget)
+{
+}
+
+OSXGestureCapture::OSXGestureCapture(GestureHandler handler) : m_handler(std::move(handler))
 {
 }
 
@@ -178,12 +183,15 @@ void OSXGestureCapture::emitGesture(int type, int phase, uint8_t fingers, int16_
       (CLOG_INFO "gesture.capture emit type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", type, phase, fingers,
        deltaX, deltaY, m_sequence)
   );
+  const GestureEvent gesture{
+      static_cast<GestureType>(type), static_cast<GesturePhase>(phase), fingers, deltaX, deltaY, m_sequence
+  };
+  if (m_handler) {
+    m_handler(gesture);
+    return;
+  }
+
   auto *event = static_cast<GestureEvent *>(malloc(sizeof(GestureEvent)));
-  event->type = static_cast<GestureType>(type);
-  event->phase = static_cast<GesturePhase>(phase);
-  event->fingers = fingers;
-  event->deltaX = deltaX;
-  event->deltaY = deltaY;
-  event->sequence = m_sequence;
+  *event = gesture;
   m_events->addEvent(Event(EventTypes::PrimaryScreenGesture, m_eventTarget, event));
 }
