@@ -52,7 +52,7 @@ extern void MTDeviceRelease(MTDeviceRef);
 namespace
 {
 //! Normalized-distance threshold for one full swipe gesture.
-constexpr double kSwipeThreshold = 0.10;
+constexpr double kSwipeThreshold = 0.05;
 //! Minimum number of valid contacts before tracking a swipe.
 constexpr int kMinFingers = 3;
 //! Cool-down between emitted gestures (seconds).
@@ -61,7 +61,7 @@ constexpr double kCoolDown = 0.25;
 //! rate at which the Alt+Tab switcher advances while the fingers keep sliding.
 constexpr double kUpdateInterval = 0.18;
 //! Minimum centroid travel required before another Update is emitted.
-constexpr double kUpdateThreshold = 0.03;
+constexpr double kUpdateThreshold = 0.015;
 
 bool isValidContact(const MTContact &c)
 {
@@ -208,17 +208,17 @@ void OSXMTGestureCapture::onContacts(void *contactsPtr, int numContacts)
             m_deltaY = 0.0;
             emit(type, GesturePhase::Begin, numContacts, static_cast<int16_t>(std::clamp(dx, -32768.0, 32767.0)),
                  static_cast<int16_t>(std::clamp(dy, -32768.0, 32767.0)));
-          } else if (type == m_swipeType && now - m_lastUpdate >= kUpdateInterval &&
-                     std::abs(dx) >= kUpdateThreshold) {
-            // Same direction, throttled: advance the switcher one more step.
+          } else if (now - m_lastUpdate >= kUpdateInterval && std::abs(dx) >= kUpdateThreshold) {
+            // Throttled advance. A direction change mid-swipe is honored by
+            // emitting the Update with the new direction, which moves the
+            // switcher the opposite way.
+            m_swipeType = type;
             m_lastUpdate = now;
             m_deltaX = 0.0;
             m_deltaY = 0.0;
             emit(type, GesturePhase::Update, numContacts, static_cast<int16_t>(std::clamp(dx, -32768.0, 32767.0)),
                  static_cast<int16_t>(std::clamp(dy, -32768.0, 32767.0)));
           }
-          // Direction changed while active: ignore the travel; the switcher
-          // stays open and awaits same-direction movement.
         } else {
           // Vertical swipe: one-shot action (task view / desktop).
           // Trackpad normalized Y grows toward the user; verified on device
