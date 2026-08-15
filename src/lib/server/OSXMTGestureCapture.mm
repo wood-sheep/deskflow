@@ -57,6 +57,11 @@ constexpr double kSwipeThreshold = 0.10;
 constexpr int kMinFingers = 3;
 //! Cool-down between emitted gestures (seconds).
 constexpr double kCoolDown = 0.25;
+//! Throttle between sustained horizontal Update events (seconds). This is the
+//! rate at which the Alt+Tab switcher advances while the fingers keep sliding.
+constexpr double kUpdateInterval = 0.18;
+//! Minimum centroid travel required before another Update is emitted.
+constexpr double kUpdateThreshold = 0.03;
 
 bool isValidContact(const MTContact &c)
 {
@@ -154,6 +159,17 @@ void OSXMTGestureCapture::onContacts(void *contactsPtr, int numContacts)
   const bool threeFingers = numContacts >= kMinFingers;
   const double now = nowSeconds();
 
+  const auto emit = [this](GestureType type, GesturePhase phase, int fingers, int16_t dx, int16_t dy) {
+    const GestureEvent event{type, phase, static_cast<uint8_t>(fingers), dx, dy, ++m_sequence};
+    LOGC(
+        true, (CLOG_INFO "mt gesture: emit type=%d phase=%d delta=%d,%d sequence=%u", static_cast<int>(type),
+              static_cast<int>(phase), event.deltaX, event.deltaY, event.sequence)
+    );
+    if (m_handler) {
+      m_handler(event);
+    }
+  };
+
   if (threeFingers && valid >= 1) {
     cx /= valid;
     cy /= valid;
@@ -179,32 +195,49 @@ void OSXMTGestureCapture::onContacts(void *contactsPtr, int numContacts)
       const double dx = m_deltaX;
       const double dy = m_deltaY;
       if (std::abs(dx) >= kSwipeThreshold || std::abs(dy) >= kSwipeThreshold) {
-        GestureType type;
         if (std::abs(dx) >= std::abs(dy)) {
-          type = dx < 0 ? GestureType::SwipeLeft : GestureType::SwipeRight;
+          // Horizontal swipe: sustained app-switcher gesture. First travel
+          // opens the switcher (Begin), continued travel advances it
+          // (Update), fingers lifting confirms (End, sent below).
+          const auto type = dx < 0 ? GestureType::SwipeLeft : GestureType::SwipeRight;
+          if (!m_swipeActive) {
+            m_swipeActive = true;
+            m_swipeType = type;
+            m_lastUpdate = now;
+            m_deltaX = 0.0;
+            m_deltaY = 0.0;
+            emit(type, GesturePhase::Begin, numContacts, static_cast<int16_t>(std::clamp(dx, -32768.0, 32767.0)),
+                 static_cast<int16_t>(std::clamp(dy, -32768.0, 32767.0)));
+          } else if (type == m_swipeType && now - m_lastUpdate >= kUpdateInterval &&
+                     std::abs(dx) >= kUpdateThreshold) {
+            // Same direction, throttled: advance the switcher one more step.
+            m_lastUpdate = now;
+            m_deltaX = 0.0;
+            m_deltaY = 0.0;
+            emit(type, GesturePhase::Update, numContacts, static_cast<int16_t>(std::clamp(dx, -32768.0, 32767.0)),
+                 static_cast<int16_t>(std::clamp(dy, -32768.0, 32767.0)));
+          }
+          // Direction changed while active: ignore the travel; the switcher
+          // stays open and awaits same-direction movement.
         } else {
+          // Vertical swipe: one-shot action (task view / desktop).
           // Trackpad normalized Y grows toward the user; verified on device
           // that a swipe up (toward the display) increases centroid Y.
-          type = dy > 0 ? GestureType::SwipeUp : GestureType::SwipeDown;
-        }
-        m_lastEmitted = now;
-        m_deltaX = 0.0;
-        m_deltaY = 0.0;
-
-        const GestureEvent event{type, GesturePhase::End, static_cast<uint8_t>(numContacts),
-                                 static_cast<int16_t>(std::clamp(dx, -32768.0, 32767.0)),
-                                 static_cast<int16_t>(std::clamp(dy, -32768.0, 32767.0)), ++m_sequence};
-        LOGC(
-            true, (CLOG_INFO "mt gesture: emit type=%d delta=%d,%d sequence=%u", static_cast<int>(type), event.deltaX,
-                  event.deltaY, event.sequence)
-        );
-        if (m_handler) {
-          m_handler(event);
+          const auto type = dy > 0 ? GestureType::SwipeUp : GestureType::SwipeDown;
+          m_deltaX = 0.0;
+          m_deltaY = 0.0;
+          m_lastEmitted = now;
+          emit(type, GesturePhase::End, numContacts, static_cast<int16_t>(std::clamp(dx, -32768.0, 32767.0)),
+               static_cast<int16_t>(std::clamp(dy, -32768.0, 32767.0)));
         }
       }
     }
   } else {
-    // Fingers lifted or fewer than three: reset tracking.
+    // Fingers lifted or fewer than three: close any open switcher, then reset.
+    if (m_swipeActive) {
+      m_swipeActive = false;
+      emit(m_swipeType, GesturePhase::End, kMinFingers, 0, 0);
+    }
     m_tracking = false;
     m_deltaX = 0.0;
     m_deltaY = 0.0;

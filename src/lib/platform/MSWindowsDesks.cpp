@@ -59,6 +59,11 @@
 #define VK_XBUTTON2 0x06
 #endif
 
+// Minimum interval between consecutive Alt+Tab switcher advances injected on
+// the client side. The server already throttles Update events, but this is a
+// second line of defense against flinging past applications.
+constexpr auto kMinSwitcherUpdateMs = 80ULL;
+
 // <unused>; <unused>
 #define DESKFLOW_MSG_SWITCH DESKFLOW_HOOK_LAST_MSG + 1
 // <unused>; <unused>
@@ -333,7 +338,7 @@ void MSWindowsDesks::fakeGesture(const GestureEvent &event)
        static_cast<int>(event.type), static_cast<int>(event.phase), event.fingers, event.deltaX, event.deltaY,
        event.sequence)
   );
-  if (event.fingers != 3 || event.phase != GesturePhase::End) {
+  if (event.fingers != 3) {
     return;
   }
   sendMessage(
@@ -527,26 +532,84 @@ void MSWindowsDesks::deskMouseRelativeMove(int32_t dx, int32_t dy) const
   }
 }
 
-void MSWindowsDesks::injectGesture(GestureType type)
+void MSWindowsDesks::injectGesture(GestureType type, GesturePhase phase)
 {
   LOGC(
       Settings::value(Settings::Log::GestureDiagnostics).toBool(),
-      (CLOG_INFO "gesture.windows inject type=%d", static_cast<int>(type))
+      (CLOG_INFO "gesture.windows inject type=%d phase=%d", static_cast<int>(type), static_cast<int>(phase))
   );
+
+  const auto sendKey = [this](WORD key, bool down) {
+    if (!send_keyboard_input(key, 0, down ? 0 : KEYEVENTF_KEYUP)) {
+      LOGC(
+          Settings::value(Settings::Log::GestureDiagnostics).toBool(),
+          (CLOG_ERR "gesture.windows SendInput failed key=0x%04x down=%d", key, down)
+      );
+      releaseInjectedKeysOnDesk();
+      return false;
+    }
+    if (down) {
+      m_injectedKeys.insert(key);
+    } else {
+      m_injectedKeys.erase(key);
+    }
+    return true;
+  };
+
+  // Horizontal swipes sustain the Alt+Tab switcher: Begin opens it (Alt held),
+  // Update moves the selection with an arrow key, End confirms by releasing Alt.
+  if (type == GestureType::SwipeLeft || type == GestureType::SwipeRight) {
+    const auto arrow = type == GestureType::SwipeLeft ? VK_LEFT : VK_RIGHT;
+    switch (phase) {
+    case GesturePhase::Begin:
+      if (m_switcherActive) {
+        return; // switcher already open
+      }
+      m_switcherActive = true;
+      m_lastSwitcherUpdate = GetTickCount64();
+      if (!sendKey(VK_LMENU, true)) {
+        return;
+      }
+      if (!sendKey(VK_TAB, true)) {
+        return;
+      }
+      sendKey(VK_TAB, false);
+      break;
+
+    case GesturePhase::Update: {
+      if (!m_switcherActive) {
+        return; // no open switcher
+      }
+      // Throttle how fast the switcher advances to avoid flinging past apps.
+      const auto now = GetTickCount64();
+      if (now - m_lastSwitcherUpdate < kMinSwitcherUpdateMs) {
+        return;
+      }
+      m_lastSwitcherUpdate = now;
+      if (!sendKey(arrow, true)) {
+        return;
+      }
+      sendKey(arrow, false);
+      break;
+    }
+
+    case GesturePhase::End:
+    case GesturePhase::Cancel:
+      if (!m_switcherActive) {
+        return;
+      }
+      m_switcherActive = false;
+      releaseInjectedKeysOnDesk();
+      break;
+    }
+    return;
+  }
+
+  // Vertical swipes are one-shot shortcuts (Win+Tab / Win+D).
   std::vector<std::pair<WORD, bool>> sequence;
   const auto appendKey = [&sequence](WORD key, bool down) { sequence.emplace_back(key, down); };
 
   switch (type) {
-  case GestureType::SwipeLeft:
-  case GestureType::SwipeRight:
-    appendKey(VK_LMENU, true);
-    appendKey(VK_TAB, true);
-    appendKey(VK_TAB, false);
-    appendKey(type == GestureType::SwipeLeft ? VK_LEFT : VK_RIGHT, true);
-    appendKey(type == GestureType::SwipeLeft ? VK_LEFT : VK_RIGHT, false);
-    appendKey(VK_LMENU, false);
-    break;
-
   case GestureType::SwipeUp:
     appendKey(VK_LWIN, true);
     appendKey(VK_TAB, true);
@@ -560,21 +623,14 @@ void MSWindowsDesks::injectGesture(GestureType type)
     appendKey('D', false);
     appendKey(VK_LWIN, false);
     break;
+
+  default:
+    return;
   }
 
   for (const auto &[key, down] : sequence) {
-    if (!send_keyboard_input(key, 0, down ? 0 : KEYEVENTF_KEYUP)) {
-      LOGC(
-          Settings::value(Settings::Log::GestureDiagnostics).toBool(),
-          (CLOG_ERR "gesture.windows SendInput failed key=0x%04x down=%d", key, down)
-      );
-      releaseInjectedKeysOnDesk();
+    if (!sendKey(key, down)) {
       return;
-    }
-    if (down) {
-      m_injectedKeys.insert(key);
-    } else {
-      m_injectedKeys.erase(key);
     }
   }
 }
@@ -877,9 +933,7 @@ void MSWindowsDesks::deskThread(const void *vdesk)
       break;
 
     case DESKFLOW_MSG_FAKE_GESTURE:
-      if (msg.lParam == static_cast<LPARAM>(GesturePhase::End)) {
-        injectGesture(static_cast<GestureType>(msg.wParam));
-      }
+      injectGesture(static_cast<GestureType>(msg.wParam), static_cast<GesturePhase>(msg.lParam));
       break;
 
     case DESKFLOW_MSG_RELEASE_INJECTED_KEYS:

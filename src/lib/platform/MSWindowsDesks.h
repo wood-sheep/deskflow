@@ -212,7 +212,7 @@ private:
   // message handlers
   void deskMouseMove(int32_t x, int32_t y) const;
   void deskMouseRelativeMove(int32_t dx, int32_t dy) const;
-  void injectGesture(GestureType type);
+  void injectGesture(GestureType type, GesturePhase phase);
   void releaseInjectedKeysOnDesk();
   void saveRelativeRestorePosition(Desk *desk) const;
   bool restoreRelativeCursorPosition(Desk *desk) const;
@@ -285,6 +285,10 @@ private:
   CondVar<bool> m_deskReady;
   Desks m_desks;
   std::set<WORD> m_injectedKeys;
+
+  // true while the Alt+Tab switcher is held open by a horizontal gesture
+  bool m_switcherActive = false;
+  double m_lastSwitcherUpdate = 0.0;
 
   // keyboard stuff
   IJob *m_updateKeys;

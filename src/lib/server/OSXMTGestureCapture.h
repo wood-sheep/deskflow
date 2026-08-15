@@ -46,5 +46,11 @@ private:
   double m_lastX = 0.0;
   double m_lastY = 0.0;
   double m_lastEmitted = 0.0;
+  // State for the sustained horizontal (app-switcher) gesture: after the
+  // first Begin is emitted, subsequent movement sends throttled Update
+  // events until the fingers lift, which sends End.
+  bool m_swipeActive = false;
+  GestureType m_swipeType = GestureType::SwipeLeft;
+  double m_lastUpdate = 0.0;
   uint32_t m_sequence = 0;
 };
