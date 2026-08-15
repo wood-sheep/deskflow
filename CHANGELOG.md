@@ -12,8 +12,11 @@
 | 三指下滑 | 显示桌面 | `Win + D` |
 | 三指左滑 | 切换到上一个任务 | `Alt + Tab` + `←` |
 | 三指右滑 | 切换到下一个任务 | `Alt + Tab` + `→` |
+| **三指持续左右滑** | **保持 Alt+Tab 切换器打开并持续切换** | `Alt` 保持 + `Tab`/`方向键` 节流触发 |
 
 > 前提：鼠标光标需停留在 Windows 屏幕上（光标离开服务器屏幕时手势才会转发到客户端）。
+>
+> 持续左右滑：首次滑动打开应用切换器（Alt 按住），继续同方向滑动按节流间隔逐项切换，三指抬起后确认切换。切换速度由 Mac 端 180ms 节流 + Windows 端 80ms 防御间隔双重控制，防止切换过快。
 
 ### 实现方式
 
@@ -44,6 +47,10 @@
 ### 提交记录
 
 ```
+c2ba58148 merge remote master
+296f2e3e4 feat: sustain Alt+Tab switcher during horizontal three-finger swipes
+ecaa9feb8 fix(windows): keep installer build compatible with latest sources
+a1aeb2137 fix(mac): correct swipe up/down direction mapping
 620bd03b3 fix(windows): read gesture fields with matching byte widths
 a6af26f13 feat(mac): capture trackpad gestures via MultitouchSupport in core
 07b498e32 i18n: add gesture diagnostics strings to translations
