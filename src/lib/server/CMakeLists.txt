@@ -40,8 +40,6 @@ add_library(server STATIC
   PrimaryClient.h
   Server.cpp
   Server.h
-  OSXMTGestureCapture.mm
-  OSXMTGestureCapture.h
 )
 
 target_link_libraries(server PUBLIC common)
@@ -51,6 +49,11 @@ if(UNIX)
 endif()
 
 if(APPLE)
+  target_sources(server PRIVATE
+    OSXMTGestureCapture.mm
+    OSXMTGestureCapture.h
+  )
+
   find_library(MULTITOUCHSUPPORT_LIBRARY
     NAMES MultitouchSupport
     PATHS /System/Library/PrivateFrameworks

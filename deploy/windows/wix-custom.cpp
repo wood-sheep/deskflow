@@ -29,7 +29,7 @@ static std::string s_logMessageBuffer; // NOSONAR - Must be mutable.
 // This log output can be viewed by using the DebugView program.
 #define MS_LOG_DEBUG(message, ...)                                                                                     \
   s_logMessageBuffer.resize(kLogLineMax);                                                                              \
-  sprintf(s_logMessageBuffer.data(), message, __VA_ARGS__);                                                            \
+  sprintf(s_logMessageBuffer.data(), message __VA_OPT__(, ) __VA_ARGS__);                                              \
   OutputDebugStringA((kLogPrefix + s_logMessageBuffer + "\n").c_str())
 
 extern "C" __declspec(dllexport) UINT __stdcall CheckVCRedist(MSIHANDLE hInstall)
