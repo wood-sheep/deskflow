@@ -27,6 +27,10 @@
 #include "server/ClientProxyUnknown.h"
 #include "server/PrimaryClient.h"
 
+#ifdef __APPLE__
+#include "server/OSXMTGestureCapture.h"
+#endif
+
 #ifdef _WIN32
 #include <algorithm>
 #include <array>
@@ -138,6 +142,26 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Scr
     m_primaryClient->fakeInputEnd();
   });
 
+#ifdef __APPLE__
+  // Mount the MultitouchSupport-based trackpad capture. Unlike the GUI
+  // NSEvent path it keeps working while Deskflow is in the background and
+  // yields reliable swipe direction from per-finger coordinates. Emitted
+  // gestures re-enter through the same PrimaryScreenGesture stream as the
+  // GUI IPC gestures.
+  m_mtGestureCapture = new OSXMTGestureCapture([this](const GestureEvent &event) {
+    auto *gesture = static_cast<GestureEvent *>(malloc(sizeof(GestureEvent)));
+    *gesture = event;
+    m_events->addEvent(Event(EventTypes::PrimaryScreenGesture, m_primaryClient->getEventTarget(), gesture));
+  });
+  if (m_mtGestureCapture->start()) {
+    LOG_INFO("mt gesture: MultitouchSupport trackpad capture enabled");
+  } else {
+    LOG_WARN("mt gesture: trackpad capture unavailable, falling back to GUI gestures");
+    delete m_mtGestureCapture;
+    m_mtGestureCapture = nullptr;
+  }
+#endif
+
   // add connection
   addClient(m_primaryClient);
 
@@ -161,6 +185,12 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Scr
 
 Server::~Server()
 {
+#ifdef __APPLE__
+  // stop the trackpad capture before tearing down event handlers
+  delete m_mtGestureCapture;
+  m_mtGestureCapture = nullptr;
+#endif
+
   // remove event handlers and timers
   using enum EventTypes;
   m_events->removeHandler(KeyStateKeyDown, m_inputFilter);

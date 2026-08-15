@@ -40,10 +40,24 @@ add_library(server STATIC
   PrimaryClient.h
   Server.cpp
   Server.h
+  OSXMTGestureCapture.mm
+  OSXMTGestureCapture.h
 )
 
 target_link_libraries(server PUBLIC common)
 
 if(UNIX)
   target_link_libraries(server PUBLIC app)
+endif()
+
+if(APPLE)
+  find_library(MULTITOUCHSUPPORT_LIBRARY
+    NAMES MultitouchSupport
+    PATHS /System/Library/PrivateFrameworks
+    NO_DEFAULT_PATH)
+  if(MULTITOUCHSUPPORT_LIBRARY)
+    target_link_libraries(server PRIVATE ${MULTITOUCHSUPPORT_LIBRARY})
+  else()
+    message(WARNING "MultitouchSupport framework not found; trackpad gestures disabled")
+  endif()
 endif()

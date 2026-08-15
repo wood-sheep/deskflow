@@ -33,6 +33,7 @@ class Screen;
 class IEventQueue;
 class Thread;
 class ClientListener;
+class OSXMTGestureCapture;
 
 //! Deskflow server
 /*!
@@ -400,6 +401,10 @@ private:
 
   // server screen
   deskflow::Screen *m_screen;
+
+#ifdef __APPLE__
+  OSXMTGestureCapture *m_mtGestureCapture = nullptr;
+#endif
 
   IEventQueue *m_events = nullptr;
   size_t m_maximumClipboardSize = INT_MAX;
