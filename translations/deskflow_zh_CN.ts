@@ -605,6 +605,14 @@ Additionally, check you are able to %1 the server config file: %2</source>
         <source>&lt;p&gt;Keyboard layout support requires matching layouts on all computers. The following layouts from the other computer are not installed on this computer:&lt;/p&gt;&lt;p&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/p&gt;&lt;p&gt;Please install them to enable support for these layouts.&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Log gesture capture, protocol forwarding, and Windows shortcut injection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable gesture diagnostics</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>NewScreenWidget</name>
@@ -1304,6 +1312,14 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Using a log level higher than Info may affect performance.</source>
         <translation type="unfinished">使用高于 Info 级别的日志级别可能会影响性能。</translation>
+    </message>
+    <message>
+        <source>Log gesture capture, protocol forwarding, and Windows shortcut injection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable gesture diagnostics</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
