@@ -60,9 +60,9 @@
 #endif
 
 // Minimum interval between consecutive Alt+Tab switcher advances injected on
-// the client side. The server already throttles Update events, but this is a
-// second line of defense against flinging past applications.
-constexpr auto kMinSwitcherUpdateMs = 80ULL;
+// the client side. The server already throttles Update events (80ms), so this
+// is a second line of defense against flinging past applications.
+constexpr auto kMinSwitcherUpdateMs = 40ULL;
 
 // <unused>; <unused>
 #define DESKFLOW_MSG_SWITCH DESKFLOW_HOOK_LAST_MSG + 1

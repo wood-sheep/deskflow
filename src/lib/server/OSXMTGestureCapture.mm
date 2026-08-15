@@ -59,9 +59,9 @@ constexpr int kMinFingers = 3;
 constexpr double kCoolDown = 0.25;
 //! Throttle between sustained horizontal Update events (seconds). This is the
 //! rate at which the Alt+Tab switcher advances while the fingers keep sliding.
-constexpr double kUpdateInterval = 0.18;
+constexpr double kUpdateInterval = 0.08;
 //! Minimum centroid travel required before another Update is emitted.
-constexpr double kUpdateThreshold = 0.015;
+constexpr double kUpdateThreshold = 0.008;
 
 bool isValidContact(const MTContact &c)
 {
