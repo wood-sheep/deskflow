@@ -183,9 +183,9 @@ void OSXMTGestureCapture::onContacts(void *contactsPtr, int numContacts)
         if (std::abs(dx) >= std::abs(dy)) {
           type = dx < 0 ? GestureType::SwipeLeft : GestureType::SwipeRight;
         } else {
-          // Trackpad normalized Y grows toward the user; a swipe up (toward
-          // the display) decreases Y.
-          type = dy < 0 ? GestureType::SwipeUp : GestureType::SwipeDown;
+          // Trackpad normalized Y grows toward the user; verified on device
+          // that a swipe up (toward the display) increases centroid Y.
+          type = dy > 0 ? GestureType::SwipeUp : GestureType::SwipeDown;
         }
         m_lastEmitted = now;
         m_deltaX = 0.0;
