@@ -229,7 +229,7 @@ QVariant Settings::defaultValue(const QString &key)
     return 250;
 
   if (key == Server::ClipboardSize)
-    return 3; // 3 MiB
+    return 10; // 10 MiB (a full-screen screenshot needs ~8 MiB as DIB)
 
   return QVariant();
 }

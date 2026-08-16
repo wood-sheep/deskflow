@@ -464,6 +464,10 @@ void Config::readSectionOptions(ConfigReadContext &s)
     addOption("", kOptionScreenSwitchTwoTap, Settings::value(Settings::Server::SwitchDoubleTap).toInt());
   }
 
+  // Edge-swipe screen switching is on by default; falls back to the plain
+  // edge-crossing behavior when disabled.
+  addOption("", kOptionScreenSwitchGesture, Settings::value(Settings::Server::EnableSwitchGesture).toBool());
+
   addOption("", kOptionDefaultLockToScreenState, Settings::value(Settings::Server::DefaultLockToComputerState).toInt());
   addOption("", kOptionDisableLockToScreen, Settings::value(Settings::Server::DisableLockToComputer).toInt());
   addOption("", kOptionRelativeMouseMoves, Settings::value(Settings::Server::RelativeMouseMoves).toInt());
@@ -1027,6 +1031,9 @@ const char *Config::getOptionName(OptionID id)
   }
   if (id == kOptionScreenSwitchNeedsAlt) {
     return "switchNeedsAlt";
+  }
+  if (id == kOptionScreenSwitchGesture) {
+    return "switchGesture";
   }
   if (id == kOptionXTestXineramaUnaware) {
     return "xtestIsXineramaUnaware";

@@ -71,6 +71,7 @@ protected:
   void setHeartbeat(int rate);
 
   void toggleRelativeMouseMoves(bool enabled);
+  void toggleSwitchGesture(bool enabled);
   void toggleProtocol();
 
   void toggleExternalConfig(bool enable = false);
@@ -107,6 +108,7 @@ private:
   bool m_relativeMouseMoves;
   bool m_enableSwitchDelay;
   bool m_enableSwitchDoubleTap;
+  bool m_enableSwitchGesture;
   bool m_originalServerConfigIsExternal;
   bool m_win32keepForeground;
   bool m_disableLockToComputer;
