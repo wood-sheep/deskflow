@@ -111,7 +111,6 @@ public:
     inline static const auto EnableHeatbeat = QStringLiteral("server/enableHeatbeat");
     inline static const auto EnableSwitchDelay = QStringLiteral("server/enableSwitchDelay");
     inline static const auto EnableSwitchDoubleTap = QStringLiteral("server/enableSwitchDoubleTap");
-    inline static const auto EnableSwitchGesture = QStringLiteral("server/enableSwitchGesture");
     inline static const auto ExternalConfig = QStringLiteral("server/externalConfig");
     inline static const auto ExternalConfigFile = QStringLiteral("server/externalConfigFile");
     inline static const auto GridHeight = QStringLiteral("server/gridHeight");
@@ -349,7 +348,6 @@ private:
     , Security::TlsEnabled
     , Security::CheckPeers
     , Server::EnableClipboard
-    , Server::EnableSwitchGesture
     , Server::Win32KeepForeground
   };
 

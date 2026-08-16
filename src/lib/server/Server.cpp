@@ -42,22 +42,6 @@
 
 using namespace deskflow::server;
 
-namespace
-{
-//! Bridge installed by the deskflow-core app; used to drive the edge-arrow
-//! overlay from the server thread (see Server::setEdgeArrowBridge).
-EdgeArrowBridge g_edgeArrowBridge;
-
-//! How long the cursor must rest at a screen edge before the arrow hint
-//! appears and the push-to-switch is armed (seconds).
-constexpr double kEdgeDwellDelay = 0.35;
-} // namespace
-
-void Server::setEdgeArrowBridge(const EdgeArrowBridge &bridge)
-{
-  g_edgeArrowBridge = bridge;
-}
-
 //
 // Server
 //
@@ -102,14 +86,7 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Scr
   }
 
   // install event handlers
-  m_events->addHandler(EventTypes::Timer, this, [this](const auto &e) {
-    const auto *info = static_cast<const IEventQueue::TimerEvent *>(e.getData());
-    if (info != nullptr && info->m_timer == m_edgeDwellTimer) {
-      handleEdgeDwellTimeout();
-    } else {
-      handleSwitchWaitTimeout();
-    }
-  });
+  m_events->addHandler(EventTypes::Timer, this, [this](const auto &) { handleSwitchWaitTimeout(); });
   m_events->addHandler(EventTypes::KeyStateKeyDown, m_inputFilter, [this](const auto &e) { handleKeyDownEvent(e); });
   m_events->addHandler(EventTypes::KeyStateKeyUp, m_inputFilter, [this](const auto &e) { handleKeyUpEvent(e); });
   m_events->addHandler(EventTypes::KeyStateKeyRepeat, m_inputFilter, [this](const auto &e) {
@@ -134,9 +111,6 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Scr
   });
   m_events->addHandler(EventTypes::PrimaryScreenGesture, m_primaryClient->getEventTarget(), [this](const auto &e) {
     handleGestureEvent(e);
-  });
-  m_events->addHandler(EventTypes::PrimaryScreenEdgePush, m_primaryClient->getEventTarget(), [this](const auto &e) {
-    handleEdgePushEvent(e);
   });
   m_events->addHandler(
       EventTypes::PrimaryScreenSaverActivated, m_primaryClient->getEventTarget(),
@@ -501,19 +475,6 @@ void Server::switchScreen(BaseClientProxy *dst, int32_t x, int32_t y, bool forSc
 
   // stop waiting to switch
   stopSwitch();
-
-  // edge dwell finished: hide the arrow hint and reset dwell state
-  if (m_edgeDwellDir != Direction::NoDirection) {
-    if (g_edgeArrowBridge.hideHint != nullptr) {
-      g_edgeArrowBridge.hideHint();
-    }
-    if (m_edgeDwellTimer != nullptr) {
-      m_events->deleteTimer(m_edgeDwellTimer);
-      m_edgeDwellTimer = nullptr;
-    }
-    m_edgeDwellDir = Direction::NoDirection;
-    m_edgeArmed = false;
-  }
 
   // record new position
   m_x = x;
@@ -941,20 +902,9 @@ void Server::noSwitch(int32_t x, int32_t y)
 {
   armSwitchTwoTap(x, y);
   stopSwitchWait();
+}
 
-  // cursor moved away from the edge: cancel any pending edge dwell
-  if (m_edgeDwellDir != Direction::NoDirection) {
-    if (g_edgeArrowBridge.hideHint != nullptr) {
-      g_edgeArrowBridge.hideHint();
-    }
-    if (m_edgeDwellTimer != nullptr) {
-      m_events->deleteTimer(m_edgeDwellTimer);
-      m_edgeDwellTimer = nullptr;
-    }
-    m_edgeDwellDir = Direction::NoDirection;
-    m_edgeArmed = false;
-  }
-}void Server::stopSwitch()
+void Server::stopSwitch()
 {
   if (m_switchScreen != nullptr) {
     m_switchScreen = nullptr;
@@ -1186,8 +1136,6 @@ void Server::processOptions()
         m_switchTwoTapDelay = 0.0;
       }
       stopSwitchTwoTap();
-    } else if (id == kOptionScreenSwitchGesture) {
-      m_enableSwitchGesture = (value != 0);
     } else if (id == kOptionRelativeMouseMoves) {
       newRelativeMoves = (value != 0);
     } else if (id == kOptionDefaultLockToScreenState) {
@@ -1377,95 +1325,6 @@ void Server::handleSwitchWaitTimeout()
 
   // switch screen
   switchScreen(m_switchScreen, m_switchWaitX, m_switchWaitY, false);
-}
-
-void Server::handleEdgeDwellTimeout()
-{
-  // The cursor has been resting at the edge long enough: show the arrow hint
-  // and arm the push-to-switch. The one-shot timer is retired so a later
-  // re-entry at the edge starts a fresh dwell.
-  if (m_edgeDwellTimer != nullptr) {
-    m_events->deleteTimer(m_edgeDwellTimer);
-    m_edgeDwellTimer = nullptr;
-  }
-  if (!m_enableSwitchGesture || m_active != m_primaryClient) {
-    m_edgeArmed = false;
-    return;
-  }
-  m_edgeArmed = true;
-  LOG_VERBOSE("edge dwell armed, direction=%d", static_cast<int>(m_edgeDwellDir));
-
-  int32_t ax;
-  int32_t ay;
-  int32_t aw;
-  int32_t ah;
-  m_active->getShape(ax, ay, aw, ah);
-  if (g_edgeArrowBridge.showHint != nullptr) {
-    int dir = 0;
-    using enum Direction;
-    switch (m_edgeDwellDir) {
-    case Left:
-      dir = 0;
-      break;
-    case Right:
-      dir = 1;
-      break;
-    case Top:
-      dir = 2;
-      break;
-    case Bottom:
-      dir = 3;
-      break;
-    default:
-      break;
-    }
-    g_edgeArrowBridge.showHint(dir, ax, ay, aw, ah);
-  }
-}
-
-void Server::handleEdgePushEvent(const Event &event)
-{
-  const auto *info = static_cast<const IPlatformScreen::MotionInfo *>(event.getData());
-  LOG_VERBOSE("edge push %+d,%+d", info->m_x, info->m_y);
-  if (!m_enableSwitchGesture || !m_edgeArmed || m_active != m_primaryClient) {
-    return;
-  }
-
-  // Only a push in the dwell direction completes the switch.
-  const int32_t dx = info->m_x;
-  const int32_t dy = info->m_y;
-  bool matches = false;
-  using enum Direction;
-  switch (m_edgeDwellDir) {
-  case Left:
-    matches = dx < 0;
-    break;
-  case Right:
-    matches = dx > 0;
-    break;
-  case Top:
-    matches = dy < 0;
-    break;
-  case Bottom:
-    matches = dy > 0;
-    break;
-  default:
-    break;
-  }
-  if (!matches) {
-    return;
-  }
-
-  int32_t x = m_x;
-  int32_t y = m_y;
-  BaseClientProxy *newScreen = mapToNeighbor(m_active, m_edgeDwellDir, x, y);
-  // Skip the switch-wait delay: the dwell already counts as the wait.
-  if (newScreen != nullptr && isSwitchOkay(newScreen, m_edgeDwellDir, x, y, x, y)) {
-    if (g_edgeArrowBridge.hideHint != nullptr) {
-      g_edgeArrowBridge.hideHint();
-    }
-    switchScreen(newScreen, x, y, false);
-  }
 }
 
 void Server::handleClientDisconnected(BaseClientProxy *client)
@@ -1860,25 +1719,6 @@ bool Server::onMouseMovePrimary(int32_t x, int32_t y)
     // still on local screen
     noSwitch(x, y);
     return false;
-  }
-
-  // Dwell-then-push switching: when the feature is enabled, reaching the edge
-  // arms a dwell timer instead of switching immediately. After the dwell the
-  // arrow hint shows, and pushing the mouse further into the edge (EdgePush)
-  // completes the switch. The immediate cross-edge behavior is preserved when
-  // the feature is disabled.
-  if (m_enableSwitchGesture) {
-    const Direction dwellDir = dirh != NoDirection ? dirh : dirv;
-    if (m_edgeDwellDir != dwellDir) {
-      m_edgeDwellDir = dwellDir;
-      m_edgeArmed = false;
-      if (m_edgeDwellTimer != nullptr) {
-        m_events->deleteTimer(m_edgeDwellTimer);
-      }
-      m_edgeDwellTimer = m_events->newOneShotTimer(kEdgeDwellDelay, this);
-      LOG_VERBOSE("edge dwell started, direction=%d", static_cast<int>(dwellDir));
-    }
-    return false; // wait for dwell + push
   }
 
   // check both horizontally and vertically

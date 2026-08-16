@@ -187,12 +187,6 @@ enum class EventTypes : uint32_t
   /// This event is sent when a normalized gesture is recognized. Event data is a pointer to GestureEvent.
   PrimaryScreenGesture,
 
-  /** This event is sent when the cursor is pinned at a screen edge and the
-      user keeps pushing against it. Event data is a pointer to MotionInfo,
-      the values are the raw mouse deltas.
-  */
-  PrimaryScreenEdgePush,
-
   /// This event is sent when screensaver is activated.
   PrimaryScreenSaverActivated,
 

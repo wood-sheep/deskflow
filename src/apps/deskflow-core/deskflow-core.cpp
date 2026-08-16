@@ -17,11 +17,6 @@
 #include "deskflow/ServerApp.h"
 #include "deskflow/ipc/CoreIpcServer.h"
 
-#if defined(Q_OS_MACOS)
-#include "EdgeArrowOverlay.h"
-#include "server/Server.h"
-#endif
-
 #if defined(Q_OS_WIN)
 #include "arch/win32/ArchMiscWindows.h"
 #endif
@@ -123,19 +118,6 @@ int main(int argc, char **argv)
 
   EventQueue events;
   const auto processName = QFileInfo(argv[0]).fileName();
-
-#if defined(Q_OS_MACOS)
-  // The edge-arrow hint overlay must live on the Qt main thread (the server
-  // runs on a worker thread). It is created up front and driven through a
-  // bridge that the server calls into.
-  static EdgeArrowOverlay g_edgeArrowOverlay;
-  Server::setEdgeArrowBridge(
-      {[](int direction, int screenX, int screenY, int screenW, int screenH) {
-         g_edgeArrowOverlay.showHint(direction, screenX, screenY, screenW, screenH);
-       },
-       []() { g_edgeArrowOverlay.hideHint(); }}
-  );
-#endif
 
   App *coreApp = createApp(parser, events, processName);
 

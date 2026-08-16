@@ -161,16 +161,6 @@
          </property>
         </widget>
        </item>
-       <item>
-        <widget class="QCheckBox" name="cbSwitchGesture">
-         <property name="text">
-          <string>Switch to the next screen by resting at the edge and pushing the mouse further</string>
-         </property>
-         <property name="toolTip">
-          <string>When enabled, holding the cursor at a screen edge shows an arrow hint; keep pushing the mouse to move to the adjacent computer. When disabled, crossing the edge switches immediately.</string>
-         </property>
-        </widget>
-       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="tabHotkeys">

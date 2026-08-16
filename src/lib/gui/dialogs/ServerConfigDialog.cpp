@@ -87,7 +87,6 @@ void ServerConfigDialog::accept()
   Settings::setValue(Settings::Server::EnableSwitchDoubleTap, m_enableSwitchDoubleTap);
   Settings::setValue(Settings::Server::SwitchDoubleTap, m_switchDoubleTap);
   Settings::setValue(Settings::Server::RelativeMouseMoves, m_relativeMouseMoves);
-  Settings::setValue(Settings::Server::EnableSwitchGesture, m_enableSwitchGesture);
   Settings::setValue(Settings::Server::Win32KeepForeground, m_win32keepForeground);
 
   QStringList screenNames;
@@ -275,14 +274,6 @@ void ServerConfigDialog::toggleRelativeMouseMoves(bool enabled)
   onChange();
 }
 
-void ServerConfigDialog::toggleSwitchGesture(bool enabled)
-{
-  if (m_enableSwitchGesture == enabled)
-    return;
-  m_enableSwitchGesture = enabled;
-  onChange();
-}
-
 void ServerConfigDialog::toggleProtocol()
 {
   m_protocol = ui->rbProtocolBarrier->isChecked() ? NetworkProtocol::Barrier : NetworkProtocol::Synergy;
@@ -407,9 +398,6 @@ void ServerConfigDialog::loadFromConfig()
   m_relativeMouseMoves = Settings::value(Settings::Server::RelativeMouseMoves).toBool();
   ui->cbRelativeMouseMoves->setChecked(m_relativeMouseMoves);
 
-  m_enableSwitchGesture = Settings::value(Settings::Server::EnableSwitchGesture).toBool();
-  ui->cbSwitchGesture->setChecked(m_enableSwitchGesture);
-
   m_win32keepForeground = Settings::value(Settings::Server::Win32KeepForeground).toBool();
   ui->cbWin32KeepForeground->setChecked(m_win32keepForeground);
 
@@ -500,7 +488,6 @@ void ServerConfigDialog::initConnections() const
   );
 
   connect(ui->cbRelativeMouseMoves, &QCheckBox::toggled, this, &ServerConfigDialog::toggleRelativeMouseMoves);
-  connect(ui->cbSwitchGesture, &QCheckBox::toggled, this, &ServerConfigDialog::toggleSwitchGesture);
   connect(ui->cbEnableClipboard, &QCheckBox::toggled, this, &ServerConfigDialog::toggleClipboard);
   connect(ui->btnBrowseConfigFile, &QPushButton::clicked, this, &ServerConfigDialog::browseConfigFile);
   connect(ui->groupExternalConfig, &QGroupBox::toggled, this, &ServerConfigDialog::toggleExternalConfig);
@@ -545,7 +532,6 @@ void ServerConfigDialog::onChange()
       m_enableSwitchDoubleTap == Settings::value(Settings::Server::EnableSwitchDoubleTap).toBool() &&
       m_switchDoubleTap == Settings::value(Settings::Server::SwitchDoubleTap).toInt() &&
       m_relativeMouseMoves == Settings::value(Settings::Server::RelativeMouseMoves).toBool() &&
-      m_enableSwitchGesture == Settings::value(Settings::Server::EnableSwitchGesture).toBool() &&
       m_win32keepForeground == Settings::value(Settings::Server::Win32KeepForeground).toBool() &&
       m_disableLockToComputer == Settings::value(Settings::Server::DisableLockToComputer).toBool() &&
       m_defaultLockToComputerState == Settings::value(Settings::Server::DefaultLockToComputerState).toBool();

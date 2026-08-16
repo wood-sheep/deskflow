@@ -1004,19 +1004,7 @@ bool OSXScreen::onMouseMove(CGEventRef event)
     CGFloat x = mx - m_xCursor;
     CGFloat y = my - m_yCursor;
 
-    if (x == 0 && y == 0) {
-      // The cursor position did not change, which happens when it is pinned
-      // at a screen edge while the user keeps pushing against it. Forward the
-      // raw deltas so the server can complete the dwell-then-push switch.
-      int32_t dx = (int32_t)CGEventGetIntegerValueField(event, kCGMouseEventDeltaX);
-      int32_t dy = (int32_t)CGEventGetIntegerValueField(event, kCGMouseEventDeltaY);
-      if (dx != 0 || dy != 0) {
-        sendEvent(EventTypes::PrimaryScreenEdgePush, MotionInfo::alloc(dx, dy));
-      }
-      return true;
-    }
-
-    if (mx == m_xCenter && mx == m_yCenter) {
+    if ((x == 0 && y == 0) || (mx == m_xCenter && mx == m_yCenter)) {
       return true;
     }
 

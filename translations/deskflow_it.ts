@@ -1112,14 +1112,6 @@ L&apos;abilitazione di questa impostazione disabiliterà l&apos;interfaccia graf
         <source>Enable lock to computer at startup</source>
         <translation type="unfinished">Abilita il blocco al computer all&apos;avvio</translation>
     </message>
-    <message>
-        <source>Switch to the next screen by resting at the edge and pushing the mouse further</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>When enabled, holding the cursor at a screen edge shows an arrow hint; keep pushing the mouse to move to the adjacent computer. When disabled, crossing the edge switches immediately.</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>SettingsDialog</name>

@@ -35,18 +35,6 @@ class Thread;
 class ClientListener;
 class OSXMTGestureCapture;
 
-//! Bridge into the edge-arrow overlay shown by the deskflow-core app.
-//!
-//! The overlay widget lives in the core executable (main Qt thread) while the
-//! server runs on a worker thread, so the server never touches the widget
-//! directly; the core installs these callbacks at startup.
-struct EdgeArrowBridge
-{
-  //! direction: 0=left 1=right 2=up 3=down (screen coordinates)
-  void (*showHint)(int direction, int screenX, int screenY, int screenW, int screenH) = nullptr;
-  void (*hideHint)() = nullptr;
-};
-
 //! Deskflow server
 /*!
 This class implements the top-level server algorithms for deskflow.
@@ -159,9 +147,6 @@ public:
 
   //! @name manipulators
   //@{
-
-  //! Install the edge-arrow overlay bridge (called by the core executable).
-  static void setEdgeArrowBridge(const EdgeArrowBridge &bridge);
 
   //! Set configuration
   /*!
@@ -333,8 +318,6 @@ private:
   void handleMotionSecondaryEvent(const Event &event);
   void handleWheelEvent(const Event &event);
   void handleGestureEvent(const Event &event);
-  void handleEdgePushEvent(const Event &event);
-  void handleEdgeDwellTimeout();
   void handleSwitchWaitTimeout();
   void handleClientDisconnected(BaseClientProxy *client);
   void handleClientCloseTimeout(BaseClientProxy *client);
@@ -415,16 +398,6 @@ private:
 
   // delay for double-tap screen switching
   double m_switchTwoTapDelay = 0.0;
-
-  // edge dwell -> arrow hint -> push to switch (default on)
-  bool m_enableSwitchGesture = true;
-
-  // state for the dwell-then-push edge switch: direction the cursor is
-  // parked at, whether the dwell timer fired (arrow shown / push armed), and
-  // the dwell one-shot timer.
-  Direction m_edgeDwellDir = Direction::NoDirection;
-  bool m_edgeArmed = false;
-  EventQueueTimer *m_edgeDwellTimer = nullptr;
 
   // server screen
   deskflow::Screen *m_screen;

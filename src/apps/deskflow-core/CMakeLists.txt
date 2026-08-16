@@ -10,8 +10,6 @@ add_executable(${target}
   CoreArgs.h
   CoreArgParser.h
   CoreArgParser.cpp
-  EdgeArrowOverlay.h
-  EdgeArrowOverlay.cpp
 )
 
 if(WIN32)
