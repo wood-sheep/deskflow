@@ -1,5 +1,24 @@
 # Deskflow Changelog
 
+## 1.26.6.1 (2026-08-16) — 截图剪贴板共享 + 边缘停留箭头切屏
+
+### 新功能 1：截图剪贴板双向共享
+
+Mac 或 Windows 上复制的截图/图片，另一端可直接粘贴：
+
+- **新增 `OSXClipboardTIFFConverter`**：通过 ImageIO/CoreGraphics 桥接 macOS 的 `public.tiff` 与协议/Windows 使用的 DIB 位图格式——macOS 截图（TIFF）现在能被读取并同步到 Windows；Windows 发来的位图也以 TIFF 写入剪贴板，macOS 应用可直接粘贴
+- **剪贴板上限提升至 10MB**（原 3MB）：全屏截图 DIB 约 8MB，之前会被丢弃
+
+### 新功能 2：边缘停留箭头 → 推鼠标切屏（类似 macOS 多设备协同）
+
+光标在屏幕边缘**停留 350ms** → 屏幕边缘出现**半透明箭头提示** → 继续推动鼠标 → 切换到相邻屏幕：
+
+- 新事件 `PrimaryScreenEdgePush`：macOS 光标被边缘 clamp 时，从原始 CGEvent delta 检测"继续推"
+- Server 端 dwell 状态机：停留计时 → armed → 箭头显示 → 方向匹配的推挤完成切换（复用 `isSwitchOkay`/`switchScreen` 守卫）
+- `EdgeArrowOverlay`：core 主线程上的无边框置顶透明箭头窗口
+- **开关**：配置服务器 → 计算机 页面新增"边缘停留显示箭头后推鼠标切屏"复选框（`server/enableSwitchGesture`，默认开）；关闭时恢复"直接越界切换"
+- 移除了上一版"三指滑到边缘切屏"（与新交互冲突）
+
 ## 1.26.0-gesture (2026-08-15) — macOS 触控板三指手势控制 Windows
 
 ### 新功能：用 MacBook 触控板三指手势操作 Windows
