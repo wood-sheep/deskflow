@@ -1,5 +1,22 @@
 # Deskflow Changelog
 
+## 1.26.6.2 (2026-08-16) — 截图剪贴板共享
+
+### 新功能：截图剪贴板双向共享
+
+Mac 或 Windows 上复制的截图/图片，另一端可直接粘贴：
+
+- **新增 `OSXClipboardTIFFConverter`**：通过 ImageIO/CoreGraphics 桥接 macOS 的 `public.tiff` 与协议/Windows 使用的 DIB 位图格式——macOS 截图（TIFF）现在能被读取并同步到 Windows；Windows 发来的位图也以 TIFF 写入剪贴板，macOS 应用可直接粘贴
+- **剪贴板上限提升至 10MB**（原 3MB）：全屏截图 DIB 约 8MB，之前会被丢弃
+
+### 说明：边缘箭头切屏已回退
+
+上一版加入的"边缘停留 → 箭头 → 推鼠标切屏"导致 macOS 端无法越界切换到 Windows（光标卡在服务器屏幕），本版已**完整回退**该功能：
+
+- 恢复原有"鼠标直接越过屏幕边界即切换"的行为
+- 移除 `PrimaryScreenEdgePush` 事件、dwell 状态机、`EdgeArrowOverlay` 及配置项
+- 该交互方案待重新设计后再行加入
+
 ## 1.26.6.1 (2026-08-16) — 截图剪贴板共享 + 边缘停留箭头切屏
 
 ### 新功能 1：截图剪贴板双向共享
