@@ -202,6 +202,16 @@ public:
   void sendConnectedClientsIpc() const;
   size_t getMaximumClipboardSizeBytes() const;
 
+  //! True if any single clipboard format is too large to share.
+  /*!
+  Bitmap data is allowed up to the full configured limit (screenshots are
+  large DIBs); Text/HTML is capped lower because Windows has to convert
+  UTF-8 to UTF-16 for the clipboard, and a multi-megabyte text blob blocks
+  the client's desk thread while it writes the clipboard, freezing the
+  mouse.
+  */
+  static bool isClipboardTooBig(const IClipboard &clipboard, size_t maxSizeBytes);
+
   //@}
 
 private:

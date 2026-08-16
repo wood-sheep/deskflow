@@ -237,6 +237,38 @@ size_t Server::getMaximumClipboardSizeBytes() const
   return m_maximumClipboardSize * 1024;
 }
 
+bool Server::isClipboardTooBig(const IClipboard &clipboard, size_t maxSizeBytes)
+{
+  // Text and HTML are capped well below the bitmap budget: the Windows client
+  // converts UTF-8 text to UTF-16 when writing the clipboard, so a large text
+  // blob (e.g. a pasted 8 MiB string) blocks the desk thread and freezes the
+  // mouse. Bitmaps are the bulk payload we actually want to share (screenshots).
+  constexpr size_t kMaxTextBytes = 1024 * 1024; // 1 MiB
+
+  if (!clipboard.open(0)) {
+    return false;
+  }
+  bool tooBig = false;
+  for (uint32_t i = 0; i < static_cast<uint32_t>(IClipboard::Format::TotalFormats); ++i) {
+    const auto format = static_cast<IClipboard::Format>(i);
+    if (!clipboard.has(format)) {
+      continue;
+    }
+    const size_t size = clipboard.get(format).size();
+    if (format == IClipboard::Format::Bitmap) {
+      if (size > maxSizeBytes) {
+        tooBig = true;
+        break;
+      }
+    } else if (size > kMaxTextBytes) {
+      tooBig = true;
+      break;
+    }
+  }
+  clipboard.close();
+  return tooBig;
+}
+
 bool Server::setConfig(const ServerConfig &config)
 {
   // refuse configuration if it doesn't include the primary screen
@@ -531,7 +563,7 @@ void Server::switchScreen(BaseClientProxy *dst, int32_t x, int32_t y, bool forSc
       // send the clipboard data to new active screen
       for (ClipboardID id = 0; id < kClipboardEnd; ++id) {
         // Hackity hackity hack
-        if (m_clipboards[id].m_clipboard.marshall().size() > (m_maximumClipboardSize * 1024)) {
+        if (isClipboardTooBig(m_clipboards[id].m_clipboard, m_maximumClipboardSize * 1024)) {
           continue;
         }
         m_active->setClipboard(id, &m_clipboards[id].m_clipboard);
@@ -1493,6 +1525,11 @@ void Server::onClipboardChanged(const BaseClientProxy *sender, ClipboardID id, u
 
   // get data
   sender->getClipboard(id, &clipboard.m_clipboard);
+
+  if (isClipboardTooBig(clipboard.m_clipboard, m_maximumClipboardSize * 1024)) {
+    LOG_INFO("ignored screen \"%s\" update of clipboard %d (format too large)", getName(sender).c_str(), id);
+    return;
+  }
 
   std::string data = clipboard.m_clipboard.marshall();
   if (data.size() > m_maximumClipboardSize * 1024) {
