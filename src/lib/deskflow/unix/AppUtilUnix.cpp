@@ -15,6 +15,8 @@
 #include <X11/XKBlib.h>
 #elif defined(Q_OS_MAC)
 #include <Carbon/Carbon.h>
+#include <dispatch/dispatch.h>
+#include <pthread.h>
 #include <platform/OSXAutoTypes.h>
 #endif
 
@@ -58,41 +60,60 @@ std::vector<std::string> AppUtilUnix::getKeyboardLayoutList()
   layoutLangCodes = X11LayoutsParser::getX11LanguageList(m_evdev);
 
 #elif defined(Q_OS_MAC)
-  CFStringRef keys[] = {kTISPropertyInputSourceCategory};
-  CFStringRef values[] = {kTISCategoryKeyboardInputSource};
-  AutoCFDictionary dict(
-      CFDictionaryCreate(nullptr, (const void **)keys, (const void **)values, 1, nullptr, nullptr), CFRelease
-  );
-  AutoCFArray kbds(nullptr, CFRelease);
-  {
-    std::lock_guard<std::mutex> lock(g_tisMutex);
-    kbds = AutoCFArray(TISCreateInputSourceList(dict.get(), false), CFRelease);
-  }
+  // TIS/TSM APIs are not thread-safe: macOS aborts the process if they are
+  // called from two threads concurrently (the Qt main thread calls
+  // TISCopyCurrentKeyboardLayoutInputSource for menu shortcuts while the
+  // server thread enumerates input sources here, e.g. in the OSXScreen
+  // constructor). Serialize the whole enumeration on the main thread.
+  const auto enumerateLayouts = []() {
+    std::vector<std::string> layoutLangCodes;
 
-  for (CFIndex i = 0; i < CFArrayGetCount(kbds.get()); ++i) {
-    TISInputSourceRef keyboardLayout = (TISInputSourceRef)CFArrayGetValueAtIndex(kbds.get(), i);
-    CFArrayRef layoutLanguages = nullptr;
+    CFStringRef keys[] = {kTISPropertyInputSourceCategory};
+    CFStringRef values[] = {kTISCategoryKeyboardInputSource};
+    AutoCFDictionary dict(
+        CFDictionaryCreate(nullptr, (const void **)keys, (const void **)values, 1, nullptr, nullptr), CFRelease
+    );
+    AutoCFArray kbds(nullptr, CFRelease);
     {
       std::lock_guard<std::mutex> lock(g_tisMutex);
-      layoutLanguages = (CFArrayRef)TISGetInputSourceProperty(keyboardLayout, kTISPropertyInputSourceLanguages);
+      kbds = AutoCFArray(TISCreateInputSourceList(dict.get(), false), CFRelease);
     }
-    char temporaryCString[128] = {0};
-    for (CFIndex index = 0; layoutLanguages && index < CFArrayGetCount(layoutLanguages); index++) {
-      auto languageCode = (CFStringRef)CFArrayGetValueAtIndex(layoutLanguages, index);
-      if (!languageCode || !CFStringGetCString(languageCode, temporaryCString, 128, kCFStringEncodingUTF8)) {
-        continue;
-      }
 
-      std::string langCode(temporaryCString);
-      if (langCode.size() == 2 &&
-          std::find(layoutLangCodes.begin(), layoutLangCodes.end(), langCode) == layoutLangCodes.end()) {
-        layoutLangCodes.push_back(langCode);
+    for (CFIndex i = 0; i < CFArrayGetCount(kbds.get()); ++i) {
+      TISInputSourceRef keyboardLayout = (TISInputSourceRef)CFArrayGetValueAtIndex(kbds.get(), i);
+      CFArrayRef layoutLanguages = nullptr;
+      {
+        std::lock_guard<std::mutex> lock(g_tisMutex);
+        layoutLanguages = (CFArrayRef)TISGetInputSourceProperty(keyboardLayout, kTISPropertyInputSourceLanguages);
       }
+      char temporaryCString[128] = {0};
+      for (CFIndex index = 0; layoutLanguages && index < CFArrayGetCount(layoutLanguages); index++) {
+        auto languageCode = (CFStringRef)CFArrayGetValueAtIndex(layoutLanguages, index);
+        if (!languageCode || !CFStringGetCString(languageCode, temporaryCString, 128, kCFStringEncodingUTF8)) {
+          continue;
+        }
 
-      // Save only first language code
-      break;
+        std::string langCode(temporaryCString);
+        if (langCode.size() == 2 &&
+            std::find(layoutLangCodes.begin(), layoutLangCodes.end(), langCode) == layoutLangCodes.end()) {
+          layoutLangCodes.push_back(langCode);
+        }
+
+        // Save only first language code
+        break;
+      }
     }
+    return layoutLangCodes;
+  };
+
+  if (pthread_main_np()) {
+    return enumerateLayouts();
   }
+  __block std::vector<std::string> mainThreadLayouts;
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    mainThreadLayouts = enumerateLayouts();
+  });
+  return mainThreadLayouts;
 #endif
 
   return layoutLangCodes;
