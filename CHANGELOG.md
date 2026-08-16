@@ -1,5 +1,26 @@
 # Deskflow Changelog
 
+## 1.26.6.3 (2026-08-16) — 稳定性修复
+
+### 修复：core 启动崩溃（TIS/TSM 跨线程调用）
+
+`deskflow-core` 启动后立即崩溃（`SIGABRT`）并反复重启，导致连接断断续续、光标自动跳回 Mac、修饰键失效：
+
+- **根因**：`OSXScreen` 构造时（worker 线程）调用 `TISCreateInputSourceList` 枚举键盘布局，与 Qt 主线程的 TIS 调用并发，macOS 直接 `abort()` 整个进程
+- **修复**：`AppUtilUnix::getKeyboardLayoutList` 的 macOS 枚举通过 `dispatch_sync` 调度到主线程执行
+
+### 修复：大文本剪贴板导致 Windows 鼠标卡死
+
+在 Mac 复制超大文本（如 8MB）后切到 Windows，Windows 端鼠标完全卡死：
+
+- **根因**：Windows 客户端将 UTF-8 文本转 UTF-16 写入剪贴板（数据量 ×2），多 MB 文本阻塞 desk 线程
+- **修复**：推送前按格式检查——**文本/HTML 上限 1MB**（超限跳过不推送、不断开），**位图保持 10MB**（截图共享不受影响）
+
+### 修复：剪贴板超限导致 Windows 断开（自动跳回）
+
+- **根因**：切屏推送剪贴板超过 Windows 接收上限时，Windows 端 `requestDisconnect` 直接断开整个连接
+- **缓解**：Mac 端按格式限制后不再推送超限数据（结合上一项）
+
 ## 1.26.6.2 (2026-08-16) — 截图剪贴板共享
 
 ### 新功能：截图剪贴板双向共享
