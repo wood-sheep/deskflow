@@ -86,10 +86,11 @@ void ServerConfigDialog::accept()
   Settings::setValue(Settings::Server::DisableLockToComputer, m_disableLockToComputer);
   Settings::setValue(Settings::Server::EnableSwitchDoubleTap, m_enableSwitchDoubleTap);
   Settings::setValue(Settings::Server::SwitchDoubleTap, m_switchDoubleTap);
-  Settings::setValue(Settings::Server::RelativeMouseMoves, m_relativeMouseMoves);
-  Settings::setValue(Settings::Server::Win32KeepForeground, m_win32keepForeground);
-
-  QStringList screenNames;
+	  Settings::setValue(Settings::Server::RelativeMouseMoves, m_relativeMouseMoves);
+	  Settings::setValue(Settings::Server::ReverseMouseScroll, m_reverseMouseScroll);
+	  Settings::setValue(Settings::Server::Win32KeepForeground, m_win32keepForeground);
+	
+	  QStringList screenNames;
   const auto screenList = m_screenSetupModel.m_Screens;
   for (const auto &screen : screenList) {
     const auto &screenName = screen.name();
@@ -274,6 +275,14 @@ void ServerConfigDialog::toggleRelativeMouseMoves(bool enabled)
   onChange();
 }
 
+void ServerConfigDialog::toggleReverseMouseScroll(bool enabled)
+{
+  if (m_reverseMouseScroll == enabled)
+    return;
+  m_reverseMouseScroll = enabled;
+  onChange();
+}
+
 void ServerConfigDialog::toggleProtocol()
 {
   m_protocol = ui->rbProtocolBarrier->isChecked() ? NetworkProtocol::Barrier : NetworkProtocol::Synergy;
@@ -398,6 +407,9 @@ void ServerConfigDialog::loadFromConfig()
   m_relativeMouseMoves = Settings::value(Settings::Server::RelativeMouseMoves).toBool();
   ui->cbRelativeMouseMoves->setChecked(m_relativeMouseMoves);
 
+  m_reverseMouseScroll = Settings::value(Settings::Server::ReverseMouseScroll).toBool();
+  ui->cbReverseMouseScroll->setChecked(m_reverseMouseScroll);
+
   m_win32keepForeground = Settings::value(Settings::Server::Win32KeepForeground).toBool();
   ui->cbWin32KeepForeground->setChecked(m_win32keepForeground);
 
@@ -487,8 +499,9 @@ void ServerConfigDialog::initConnections() const
       ui->sbSwitchDoubleTap, QOverload<int>::of(&QSpinBox::valueChanged), this, &ServerConfigDialog::setSwitchDoubleTap
   );
 
-  connect(ui->cbRelativeMouseMoves, &QCheckBox::toggled, this, &ServerConfigDialog::toggleRelativeMouseMoves);
-  connect(ui->cbEnableClipboard, &QCheckBox::toggled, this, &ServerConfigDialog::toggleClipboard);
+	  connect(ui->cbRelativeMouseMoves, &QCheckBox::toggled, this, &ServerConfigDialog::toggleRelativeMouseMoves);
+	  connect(ui->cbReverseMouseScroll, &QCheckBox::toggled, this, &ServerConfigDialog::toggleReverseMouseScroll);
+	  connect(ui->cbEnableClipboard, &QCheckBox::toggled, this, &ServerConfigDialog::toggleClipboard);
   connect(ui->btnBrowseConfigFile, &QPushButton::clicked, this, &ServerConfigDialog::browseConfigFile);
   connect(ui->groupExternalConfig, &QGroupBox::toggled, this, &ServerConfigDialog::toggleExternalConfig);
 
@@ -531,8 +544,9 @@ void ServerConfigDialog::onChange()
       m_switchDelay == Settings::value(Settings::Server::SwitchDelay).toInt() &&
       m_enableSwitchDoubleTap == Settings::value(Settings::Server::EnableSwitchDoubleTap).toBool() &&
       m_switchDoubleTap == Settings::value(Settings::Server::SwitchDoubleTap).toInt() &&
-      m_relativeMouseMoves == Settings::value(Settings::Server::RelativeMouseMoves).toBool() &&
-      m_win32keepForeground == Settings::value(Settings::Server::Win32KeepForeground).toBool() &&
+	      m_relativeMouseMoves == Settings::value(Settings::Server::RelativeMouseMoves).toBool() &&
+	      m_reverseMouseScroll == Settings::value(Settings::Server::ReverseMouseScroll).toBool() &&
+	      m_win32keepForeground == Settings::value(Settings::Server::Win32KeepForeground).toBool() &&
       m_disableLockToComputer == Settings::value(Settings::Server::DisableLockToComputer).toBool() &&
       m_defaultLockToComputerState == Settings::value(Settings::Server::DefaultLockToComputerState).toBool();
   ui->buttonBox->button(QDialogButtonBox::Ok)

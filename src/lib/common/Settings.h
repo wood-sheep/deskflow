@@ -122,6 +122,7 @@ public:
     inline static const auto SwitchDoubleTap = QStringLiteral("server/switchDoubleTap");
     inline static const auto Win32KeepForeground = QStringLiteral("server/win32KeepForeground");
     inline static const auto XdpRestoreToken = QStringLiteral("server/xdpRestoreToken");
+    inline static const auto ReverseMouseScroll = QStringLiteral("server/reverseMouseScroll");
   };
 
   struct Screen
@@ -306,6 +307,7 @@ private:
     , Server::Heartbeat
     , Server::Protocol
     , Server::RelativeMouseMoves
+    , Server::ReverseMouseScroll
     , Server::SwitchDelay
     , Server::SwitchDoubleTap
     , Server::Win32KeepForeground

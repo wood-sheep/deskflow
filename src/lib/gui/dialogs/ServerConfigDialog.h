@@ -71,6 +71,7 @@ protected:
   void setHeartbeat(int rate);
 
   void toggleRelativeMouseMoves(bool enabled);
+  void toggleReverseMouseScroll(bool enabled);
   void toggleProtocol();
 
   void toggleExternalConfig(bool enable = false);
@@ -105,6 +106,7 @@ private:
   int m_switchDoubleTap;
   uint m_clipboardSize;
   bool m_relativeMouseMoves;
+  bool m_reverseMouseScroll;
   bool m_enableSwitchDelay;
   bool m_enableSwitchDoubleTap;
   bool m_originalServerConfigIsExternal;

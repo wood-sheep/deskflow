@@ -1112,6 +1112,14 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
         <source>Enable lock to computer at startup</source>
         <translation type="unfinished">Activar el bloqueo del ordenador al iniciar</translation>
     </message>
+    <message>
+        <source>反转鼠标滚轮方向（不影响触控板）</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>开启后，鼠标滚轮在转发到 Windows 时方向会反转。触控板保持系统方向，不受影响。</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>SettingsDialog</name>

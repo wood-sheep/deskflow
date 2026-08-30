@@ -1700,12 +1700,54 @@ CGEventRef OSXScreen::handleCGInputEvent(CGEventTapProxy proxy, CGEventType type
     // the move below instead of returning (leaking) it to local apps.
     screen->onMouseMove(event);
     break;
-  case kCGEventScrollWheel:
-    screen->onMouseWheel(
-        screen->mapScrollWheelToDeskflow(CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis2)),
-        screen->mapScrollWheelToDeskflow(CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis1))
-    );
-    break;
+	  case kCGEventScrollWheel: {
+	    int32_t x = screen->mapScrollWheelToDeskflow(CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis2));
+	    int32_t y = screen->mapScrollWheelToDeskflow(CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis1));
+	    // 区分触控板（连续滚动）和鼠标（离散滚动）
+	    // kCGScrollWheelEventIsContinuous: 1=触控板, 0=鼠标
+	    bool isTrackpad = CGEventGetIntegerValueField(event, kCGScrollWheelEventIsContinuous) == 1;
+	    // 直接读取配置文件，绕过 QSettings 缓存
+	    bool reverseMouse = false;
+	    QString configFile = "/Users/apple/Library/Deskflow/Deskflow.conf";
+	    QFile file(configFile);
+	    bool fileExists = file.exists();
+	    bool fileOpened = false;
+	    bool foundServer = false;
+	    bool foundSetting = false;
+	    QString foundValue;
+	    
+	    if (fileExists && file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+	      fileOpened = true;
+	      QTextStream in(&file);
+	      bool inServerSection = false;
+	      while (!in.atEnd()) {
+	        QString line = in.readLine().trimmed();
+	        if (line == "[server]") {
+	          inServerSection = true;
+	          foundServer = true;
+	        } else if (line.startsWith("[") && line != "[server]") {
+	          inServerSection = false;
+	        } else if (inServerSection && line.startsWith("reverseMouseScroll")) {
+	          foundSetting = true;
+	          foundValue = line.split("=").last().trimmed();
+	          reverseMouse = (foundValue.toLower() == "true" || foundValue == "1");
+	          break;
+	        }
+	      }
+	      file.close();
+	    }
+	    LOG_INFO("scroll wheel: isTrackpad=%d, reverseMouse=%d (fileExists=%d, opened=%d, server=%d, setting=%d, value=%s), x=%d, y=%d", 
+	             isTrackpad, reverseMouse, fileExists, fileOpened, foundServer, foundSetting, 
+	             foundValue.toUtf8().constData(), x, y);
+	    // 只对鼠标滚轮应用反转，触控板保持系统方向
+	    if (!isTrackpad && reverseMouse) {
+	      x = -x;
+	      y = -y;
+	      LOG_INFO("scroll wheel: reversed to x=%d, y=%d", x, y);
+	    }
+	    screen->onMouseWheel(x, y);
+	    break;
+	  }
   case kCGEventKeyDown:
   case kCGEventKeyUp:
   case kCGEventFlagsChanged:
