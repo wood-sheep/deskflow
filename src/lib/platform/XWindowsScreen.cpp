@@ -1971,55 +1971,119 @@ void XWindowsScreen::selectXIRawMotion()
 // 触控板手势处理
 void XWindowsScreen::handleTouchEvent(XIDeviceEvent *event)
 {
-  // 简化的手势检测：跟踪触控点数量
-  static int touchCount = 0;
-  static int32_t startX = 0, startY = 0;
-  static int32_t lastX = 0, lastY = 0;
+  // 跟踪多个触控点，用于准确识别三指手势
+  struct TouchPoint {
+    int32_t id;
+    int32_t startX, startY;
+    int32_t lastX, lastY;
+    bool active;
+  };
+  
+  static TouchPoint touches[10]; // 最多支持 10 个触控点
+  static int activeTouchCount = 0;
+  static bool gestureInProgress = false;
+  static int32_t gestureStartX = 0, gestureStartY = 0;
+  static int32_t gestureLastX = 0, gestureLastY = 0;
+  static bool isThreeFingerGesture = false;
   
   if (event->evtype == XI_TouchBegin) {
-    touchCount++;
-    if (touchCount == 1) {
-      startX = lastX = event->event_x;
-      startY = lastY = event->event_y;
+    // 查找空闲槽位
+    for (int i = 0; i < 10; i++) {
+      if (!touches[i].active) {
+        touches[i].id = event->detail;
+        touches[i].startX = touches[i].lastX = event->event_x;
+        touches[i].startY = touches[i].lastY = event->event_y;
+        touches[i].active = true;
+        activeTouchCount++;
+        
+        // 如果是第三个触控点，标记为三指手势
+        if (activeTouchCount == 3) {
+          isThreeFingerGesture = true;
+          gestureInProgress = true;
+          // 使用第一个触控点的位置作为手势起点
+          for (int j = 0; j < 10; j++) {
+            if (touches[j].active) {
+              gestureStartX = gestureLastX = touches[j].lastX;
+              gestureStartY = gestureLastY = touches[j].lastY;
+              break;
+            }
+          }
+        }
+        break;
+      }
     }
   } else if (event->evtype == XI_TouchUpdate) {
-    if (touchCount > 0) {
-      lastX = event->event_x;
-      lastY = event->event_y;
+    // 更新触控点位置
+    for (int i = 0; i < 10; i++) {
+      if (touches[i].active && touches[i].id == event->detail) {
+        touches[i].lastX = event->event_x;
+        touches[i].lastY = event->event_y;
+        
+        // 如果是三指手势，更新手势位置（使用第一个触控点）
+        if (isThreeFingerGesture && gestureInProgress) {
+          for (int j = 0; j < 10; j++) {
+            if (touches[j].active) {
+              gestureLastX = touches[j].lastX;
+              gestureLastY = touches[j].lastY;
+              break;
+            }
+          }
+        }
+        break;
+      }
     }
   } else if (event->evtype == XI_TouchEnd) {
-    if (touchCount > 0) {
-      touchCount--;
-      
-      // 三指手势检测
-      if (touchCount == 0) {
-        int32_t deltaX = lastX - startX;
-        int32_t deltaY = lastY - startY;
-        int32_t absX = abs(deltaX);
-        int32_t absY = abs(deltaY);
+    // 移除触控点
+    for (int i = 0; i < 10; i++) {
+      if (touches[i].active && touches[i].id == event->detail) {
+        touches[i].active = false;
+        activeTouchCount--;
         
-        // 阈值：50 像素
-        const int threshold = 50;
-        
-        if (absY > threshold && absY > absX * 2) {
-          // 垂直滑动
-          if (deltaY < 0) {
-            // 三指上滑 -> Win+W
-            LOG_INFO("gesture: three-finger swipe up -> Win+W");
-            fakeKeyEvent(kKeySuper, kKeyW, true);
-            fakeKeyEvent(kKeySuper, kKeyW, false);
-          } else {
-            // 三指下滑 -> Win+D
-            LOG_INFO("gesture: three-finger swipe down -> Win+D");
-            fakeKeyEvent(kKeySuper, kKeyD, true);
-            fakeKeyEvent(kKeySuper, kKeyD, false);
+        // 如果所有触控点都释放，处理手势
+        if (activeTouchCount == 0 && gestureInProgress) {
+          int32_t deltaX = gestureLastX - gestureStartX;
+          int32_t deltaY = gestureLastY - gestureStartY;
+          int32_t absX = abs(deltaX);
+          int32_t absY = abs(deltaY);
+          
+          // 阈值：80 像素（提高阈值减少误触发）
+          const int threshold = 80;
+          
+          if (isThreeFingerGesture) {
+            if (absY > threshold && absY > absX * 1.5) {
+              // 垂直滑动
+              if (deltaY < 0) {
+                // 三指上滑 -> Win+W
+                LOG_INFO("gesture: three-finger swipe up -> Win+W");
+                fakeKeyEvent(kKeySuper, kKeyW, true);
+                fakeKeyEvent(kKeySuper, kKeyW, false);
+              } else {
+                // 三指下滑 -> Win+D
+                LOG_INFO("gesture: three-finger swipe down -> Win+D");
+                fakeKeyEvent(kKeySuper, kKeyD, true);
+                fakeKeyEvent(kKeySuper, kKeyD, false);
+              }
+            } else if (absX > threshold && absX > absY * 1.5) {
+              // 水平滑动 -> Win+Tab（左右切换）
+              if (deltaX > 0) {
+                // 三指右滑 -> Win+Tab（下一个应用）
+                LOG_INFO("gesture: three-finger swipe right -> Win+Tab");
+                fakeKeyEvent(kKeySuper, kKeyTab, true);
+                fakeKeyEvent(kKeySuper, kKeyTab, false);
+              } else {
+                // 三指左滑 -> Win+Shift+Tab（上一个应用）
+                LOG_INFO("gesture: three-finger swipe left -> Win+Shift+Tab");
+                fakeKeyEvent(kKeySuper | kKeyShift, kKeyTab, true);
+                fakeKeyEvent(kKeySuper | kKeyShift, kKeyTab, false);
+              }
+            }
           }
-        } else if (absX > threshold && absX > absY * 2) {
-          // 水平滑动 -> Win+Tab
-          LOG_INFO("gesture: three-finger swipe horizontal -> Win+Tab");
-          fakeKeyEvent(kKeySuper, kKeyTab, true);
-          fakeKeyEvent(kKeySuper, kKeyTab, false);
+          
+          // 重置手势状态
+          gestureInProgress = false;
+          isThreeFingerGesture = false;
         }
+        break;
       }
     }
   }
