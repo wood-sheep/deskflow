@@ -1183,6 +1183,11 @@ void XWindowsScreen::handleSystemEvent(const Event &event)
         onMouseMove(xmotion);
         XFreeEventData(m_display, cookie);
         return;
+      } else if (cookie->evtype == XI_TouchBegin || cookie->evtype == XI_TouchUpdate || cookie->evtype == XI_TouchEnd) {
+        // 处理触控板手势事件
+        handleTouchEvent(cookie->data);
+        XFreeEventData(m_display, cookie);
+        return;
       }
       XFreeEventData(m_display, cookie);
     }
@@ -1950,7 +1955,89 @@ void XWindowsScreen::selectXIRawMotion()
   memset(mask.mask, 0, 2);
   XISetMask(mask.mask, XI_RawKeyRelease);
   XISetMask(mask.mask, XI_RawMotion);
+  
+  // 订阅触控板手势事件（用于三指手势识别）
+  mask.mask_len = XIMaskLen(XI_TouchEnd);
+  mask.mask = (unsigned char *)realloc(mask.mask, mask.mask_len);
+  memset(mask.mask, 0, mask.mask_len);
+  XISetMask(mask.mask, XI_TouchBegin);
+  XISetMask(mask.mask, XI_TouchUpdate);
+  XISetMask(mask.mask, XI_TouchEnd);
+  
   XISelectEvents(m_display, DefaultRootWindow(m_display), &mask, 1);
   free(mask.mask);
+}
+
+// 触控板手势处理
+void XWindowsScreen::handleTouchEvent(XIDeviceEvent *event)
+{
+  // 简化的手势检测：跟踪触控点数量
+  static int touchCount = 0;
+  static int32_t startX = 0, startY = 0;
+  static int32_t lastX = 0, lastY = 0;
+  
+  if (event->evtype == XI_TouchBegin) {
+    touchCount++;
+    if (touchCount == 1) {
+      startX = lastX = event->event_x;
+      startY = lastY = event->event_y;
+    }
+  } else if (event->evtype == XI_TouchUpdate) {
+    if (touchCount > 0) {
+      lastX = event->event_x;
+      lastY = event->event_y;
+    }
+  } else if (event->evtype == XI_TouchEnd) {
+    if (touchCount > 0) {
+      touchCount--;
+      
+      // 三指手势检测
+      if (touchCount == 0) {
+        int32_t deltaX = lastX - startX;
+        int32_t deltaY = lastY - startY;
+        int32_t absX = abs(deltaX);
+        int32_t absY = abs(deltaY);
+        
+        // 阈值：50 像素
+        const int threshold = 50;
+        
+        if (absY > threshold && absY > absX * 2) {
+          // 垂直滑动
+          if (deltaY < 0) {
+            // 三指上滑 -> Win+W
+            LOG_INFO("gesture: three-finger swipe up -> Win+W");
+            fakeKeyEvent(kKeySuper, kKeyW, true);
+            fakeKeyEvent(kKeySuper, kKeyW, false);
+          } else {
+            // 三指下滑 -> Win+D
+            LOG_INFO("gesture: three-finger swipe down -> Win+D");
+            fakeKeyEvent(kKeySuper, kKeyD, true);
+            fakeKeyEvent(kKeySuper, kKeyD, false);
+          }
+        } else if (absX > threshold && absX > absY * 2) {
+          // 水平滑动 -> Win+Tab
+          LOG_INFO("gesture: three-finger swipe horizontal -> Win+Tab");
+          fakeKeyEvent(kKeySuper, kKeyTab, true);
+          fakeKeyEvent(kKeySuper, kKeyTab, false);
+        }
+      }
+    }
+  }
+}
+
+void XWindowsScreen::fakeKeyEvent(KeyID key, KeyModifierMask mask, bool press)
+{
+  // 发送键盘事件（用于手势触发的快捷键）
+  auto *xkeyState = dynamic_cast<XWindowsKeyState *>(m_keyState);
+  if (xkeyState == nullptr) {
+    return;
+  }
+  
+  XWindowsKeyState::KeycodeList keycodes;
+  xkeyState->mapKeyToKeycodes(key, keycodes);
+  if (!keycodes.empty()) {
+    KeyButton button = static_cast<KeyButton>(keycodes[0]);
+    m_keyState->sendKeyEvent(getEventTarget(), press, false, key, mask, 1, button);
+  }
 }
 #endif

@@ -60,6 +60,12 @@ public:
   void fakeMouseRelativeMove(int32_t dx, int32_t dy) const override;
   void fakeMouseWheel(ScrollDelta delta) const override;
 
+#ifdef HAVE_XI2
+  // 触控板手势处理
+  void handleTouchEvent(void *event);
+  void fakeKeyEvent(KeyID key, KeyModifierMask mask, bool press);
+#endif
+
   // IPlatformScreen overrides
   void enable() override;
   void disable() override;
