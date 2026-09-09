@@ -8,6 +8,9 @@
 
 #include "client/ServerProxy.h"
 
+#include "deskflow/ClipboardLimits.h"
+#include "deskflow/ScrollDiagnostics.h"
+
 #include "base/IEventQueue.h"
 #include "base/Log.h"
 #include "client/Client.h"
@@ -22,8 +25,8 @@
 #include "deskflow/ipc/CoreIpc.h"
 #include "io/IStream.h"
 
-#include <cstring>
 #include <climits>
+#include <cstring>
 
 //
 // ServerProxy
@@ -553,23 +556,32 @@ void ServerProxy::setClipboard()
   uint32_t seq;
 
   auto r = ClipboardChunk::assemble(
-      m_stream, m_clipboardDataCached, id, seq, m_clipboardChunkState, m_client->getMaximumClipboardReceiveSizeBytes()
+      m_stream, m_clipboardDataCached, id, seq, m_clipboardChunkState,
+      std::min(m_client->getMaximumClipboardReceiveSizeBytes(), deskflow::ClipboardLimits::maximumBytes), true
   );
 
   if (r == TransferState::Started) {
+    deskflow::logScrollTiming("clipboard-receive-start");
     size_t size = ClipboardChunk::getExpectedSize(m_clipboardChunkState);
     LOG_DEBUG("receiving clipboard %d size=%zu", id, size);
   } else if (r == TransferState::Finished) {
+    deskflow::logScrollTiming("clipboard-assembled");
     LOG_DEBUG("received clipboard %d size=%zu", id, m_clipboardDataCached.size());
 
     // forward
     Clipboard clipboard;
-    clipboard.unmarshall(m_clipboardDataCached, 0);
-    m_client->setClipboard(id, &clipboard);
+    clipboard.unmarshall(std::move(m_clipboardDataCached), 0);
+    deskflow::logScrollTiming("clipboard-unmarshalled");
+    if (deskflow::ClipboardLimits::allows(&clipboard)) {
+      m_client->setClipboard(id, &clipboard);
+      deskflow::logScrollTiming("clipboard-enqueued");
+      LOG_INFO("clipboard was updated");
+    } else {
+      LOG_WARN("skipping clipboard exceeding text or image limits; existing clipboard preserved");
+    }
     m_clipboardDataCached.clear();
     m_clipboardDataCached.shrink_to_fit();
 
-    LOG_INFO("clipboard was updated");
   } else if (r == TransferState::Error) {
     requestDisconnect("invalid clipboard data from server");
   }
@@ -759,6 +771,7 @@ void ServerProxy::mouseWheel()
   int16_t yDelta;
   ProtocolUtil::readf(m_stream, kMsgDMouseWheel + 4, &xDelta, &yDelta);
   LOG_VERBOSE("recv mouse wheel %+d,%+d", xDelta, yDelta);
+  deskflow::logScrollTiming("receive", xDelta, yDelta);
 
   // forward
   m_client->mouseWheel(xDelta, yDelta);
@@ -780,8 +793,8 @@ void ServerProxy::gesture()
   uint32_t sequence;
   ProtocolUtil::readf(m_stream, kMsgDGesture + 4, &type, &phase, &fingers, &deltaX, &deltaY, &sequence);
 
-  if (type > static_cast<uint8_t>(GestureType::SwipeDown) ||
-      phase > static_cast<uint8_t>(GesturePhase::Cancel) || fingers == 0) {
+  if (type > static_cast<uint8_t>(GestureType::SwipeDown) || phase > static_cast<uint8_t>(GesturePhase::Cancel) ||
+      fingers == 0) {
     throw BadClientException();
   }
 
@@ -790,8 +803,8 @@ void ServerProxy::gesture()
   };
   LOGC(
       Settings::value(Settings::Log::GestureDiagnostics).toBool(),
-      (CLOG_INFO "gesture.protocol receive type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", type, phase,
-       fingers, deltaX, deltaY, event.sequence)
+      (CLOG_INFO "gesture.protocol receive type=%d phase=%d fingers=%d delta=%d,%d sequence=%u", type, phase, fingers,
+       deltaX, deltaY, event.sequence)
   );
   m_client->gesture(event);
 }

@@ -13,7 +13,9 @@
 #include "common/Settings.h"
 
 #ifdef HAVE_LIBPORTAL_CLIPBOARD
+#include "platform/EiClipboard.h"
 #include "platform/PortalClipboard.h"
+#include "platform/PortalClipboardPublisher.h"
 #endif
 
 namespace deskflow {
@@ -23,6 +25,9 @@ PortalRemoteDesktop::PortalRemoteDesktop(EiScreen *screen, IEventQueue *events)
       m_events{events},
       m_portal{xdp_portal_new()}
 {
+#ifdef HAVE_LIBPORTAL_CLIPBOARD
+  m_clipboardPublisher = std::make_unique<PortalClipboardPublisher>(m_screen->getClipboardCache());
+#endif
   m_glibMainLoop = g_main_loop_new(nullptr, true);
 
   auto tMethodJob = new TMethodJob<PortalRemoteDesktop>(this, &PortalRemoteDesktop::glibThread);
@@ -33,6 +38,9 @@ PortalRemoteDesktop::PortalRemoteDesktop(EiScreen *screen, IEventQueue *events)
 
 PortalRemoteDesktop::~PortalRemoteDesktop()
 {
+#ifdef HAVE_LIBPORTAL_CLIPBOARD
+  m_clipboardPublisher->shutdown();
+#endif
   if (g_main_loop_is_running(m_glibMainLoop))
     g_main_loop_quit(m_glibMainLoop);
 
@@ -76,6 +84,9 @@ void PortalRemoteDesktop::reconnect(unsigned int timeout)
 
 void PortalRemoteDesktop::handleSessionClosed(XdpSession *session)
 {
+#ifdef HAVE_LIBPORTAL_CLIPBOARD
+  m_clipboardPublisher->cancel();
+#endif
   LOG_ERR("portal remote desktop session was closed, reconnecting");
   g_signal_handler_disconnect(session, m_sessionSignalId);
   m_sessionSignalId = 0;
@@ -222,6 +233,21 @@ void PortalRemoteDesktop::glibThread(const void *)
 void PortalRemoteDesktop::claimClipboard() const
 {
 #ifdef HAVE_LIBPORTAL_CLIPBOARD
+  auto *cache = m_screen->getClipboardCache();
+  const bool allFormats = Settings::value(Settings::Client::WaylandClipboardHelper).toBool();
+  const bool images = Settings::value(Settings::Client::WaylandClipboardImageHelper).toBool();
+  if (allFormats || images) {
+    cache->open(0);
+    const auto format = cache->has(IClipboard::Format::Bitmap) ? IClipboard::Format::Bitmap : IClipboard::Format::Text;
+    const bool supported = cache->has(format) && (allFormats || format == IClipboard::Format::Bitmap);
+    const auto revision = cache->revision();
+    auto data = supported ? cache->get(format) : std::string();
+    cache->close();
+    if (supported) {
+      m_clipboardPublisher->submit(format, std::move(data), revision);
+      return;
+    }
+  }
   if (!m_session) {
     LOG_DEBUG("portal remote desktop clipboard claim deferred, no session yet");
     return;
@@ -254,8 +280,10 @@ void PortalRemoteDesktop::handleSelectionOwnerChanged(XdpSession *session, char 
   }
 
   const qint64 maxBytes = static_cast<qint64>(m_screen->maximumClipboardSize()) * 1024;
-  if (PortalClipboard::readSelectionIntoCache(m_screen->getClipboardCache(), session, mimeTypes, maxBytes))
+  if (PortalClipboard::readSelectionIntoCache(m_screen->getClipboardCache(), session, mimeTypes, maxBytes)) {
+    m_clipboardPublisher->cancel();
     m_screen->sendClipboardEvent(EventTypes::ClipboardGrabbed, kClipboardClipboard);
+  }
 #else
   (void)session;
   (void)mimeTypes;

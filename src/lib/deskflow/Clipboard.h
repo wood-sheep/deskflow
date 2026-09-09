@@ -30,6 +30,7 @@ public:
   Sets the clipboard time to \c time.
   */
   void unmarshall(const std::string &data, Time time);
+  void unmarshall(std::string &&data, Time time);
 
   //@}
   //! @name accessors
@@ -52,6 +53,7 @@ public:
   Time getTime() const override;
   bool has(Format) const override;
   std::string get(Format) const override;
+  size_t getSize(Format) const override;
 
 private:
   mutable bool m_open = false;

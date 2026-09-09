@@ -1969,8 +1969,9 @@ void XWindowsScreen::selectXIRawMotion()
 }
 
 // 触控板手势处理
-void XWindowsScreen::handleTouchEvent(XIDeviceEvent *event)
+void XWindowsScreen::handleTouchEvent(void *rawEvent)
 {
+  auto *event = static_cast<XIDeviceEvent *>(rawEvent);
   // 跟踪多个触控点，用于准确识别三指手势
   struct TouchPoint {
     int32_t id;
@@ -2055,26 +2056,26 @@ void XWindowsScreen::handleTouchEvent(XIDeviceEvent *event)
               if (deltaY < 0) {
                 // 三指上滑 -> Win+W
                 LOG_INFO("gesture: three-finger swipe up -> Win+W");
-                fakeKeyEvent(kKeySuper, kKeyW, true);
-                fakeKeyEvent(kKeySuper, kKeyW, false);
+                fakeKeyEvent(static_cast<KeyID>('w'), KeyModifierSuper, true);
+                fakeKeyEvent(static_cast<KeyID>('w'), KeyModifierSuper, false);
               } else {
                 // 三指下滑 -> Win+D
                 LOG_INFO("gesture: three-finger swipe down -> Win+D");
-                fakeKeyEvent(kKeySuper, kKeyD, true);
-                fakeKeyEvent(kKeySuper, kKeyD, false);
+                fakeKeyEvent(static_cast<KeyID>('d'), KeyModifierSuper, true);
+                fakeKeyEvent(static_cast<KeyID>('d'), KeyModifierSuper, false);
               }
             } else if (absX > threshold && absX > absY * 1.5) {
               // 水平滑动 -> Win+Tab（左右切换）
               if (deltaX > 0) {
                 // 三指右滑 -> Win+Tab（下一个应用）
                 LOG_INFO("gesture: three-finger swipe right -> Win+Tab");
-                fakeKeyEvent(kKeySuper, kKeyTab, true);
-                fakeKeyEvent(kKeySuper, kKeyTab, false);
+                fakeKeyEvent(kKeyTab, KeyModifierSuper, true);
+                fakeKeyEvent(kKeyTab, KeyModifierSuper, false);
               } else {
                 // 三指左滑 -> Win+Shift+Tab（上一个应用）
                 LOG_INFO("gesture: three-finger swipe left -> Win+Shift+Tab");
-                fakeKeyEvent(kKeySuper | kKeyShift, kKeyTab, true);
-                fakeKeyEvent(kKeySuper | kKeyShift, kKeyTab, false);
+                fakeKeyEvent(kKeyTab, KeyModifierSuper | KeyModifierShift, true);
+                fakeKeyEvent(kKeyTab, KeyModifierSuper | KeyModifierShift, false);
               }
             }
           }

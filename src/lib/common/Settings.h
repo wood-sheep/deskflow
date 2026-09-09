@@ -42,6 +42,8 @@ public:
     inline static const auto XScrollScale = QStringLiteral("client/xScrollScale");
     inline static const auto LanguageSync = QStringLiteral("client/languageSync");
     inline static const auto RemoteHost = QStringLiteral("client/remoteHost");
+    inline static const auto WaylandClipboardImageHelper = QStringLiteral("client/waylandClipboardImageHelper");
+    inline static const auto WaylandClipboardHelper = QStringLiteral("client/waylandClipboardHelper");
     inline static const auto XdpRestoreToken = QStringLiteral("client/xdpRestoreToken");
   };
   struct Core
@@ -94,6 +96,7 @@ public:
     inline static const auto ToFile = QStringLiteral("log/toFile");
     inline static const auto GuiDebug = QStringLiteral("log/guiDebug");
     inline static const auto GestureDiagnostics = QStringLiteral("log/gestureDiagnostics");
+    inline static const auto ScrollDiagnostics = QStringLiteral("log/scrollDiagnostics");
   };
   struct Security
   {
@@ -252,6 +255,8 @@ private:
     , Client::LanguageSync
     , Client::RemoteHost
     , Client::YScrollScale
+    , Client::WaylandClipboardImageHelper
+    , Client::WaylandClipboardHelper
     , Client::XScrollScale
     , Core::CoreMode
     , Core::Interface
@@ -277,6 +282,7 @@ private:
     , Log::ToFile
     , Log::GuiDebug
     , Log::GestureDiagnostics
+    , Log::ScrollDiagnostics
     , Gui::Autohide
     , Gui::AutoStartCore
     , Gui::AutoUpdateCheck
@@ -330,6 +336,7 @@ private:
     , Log::ToFile
     , Log::GuiDebug
     , Log::GestureDiagnostics
+    , Log::ScrollDiagnostics
     , Server::DefaultLockToComputerState
     , Server::DisableLockToComputer
     , Server::EnableHeatbeat

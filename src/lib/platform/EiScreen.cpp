@@ -15,6 +15,7 @@
 #include "deskflow/App.h"
 #include "deskflow/IScreen.h"
 #include "deskflow/OptionTypes.h"
+#include "deskflow/ScrollDiagnostics.h"
 #include "platform/EiClipboard.h"
 #include "platform/EiEventQueueBuffer.h"
 #include "platform/EiKeyState.h"
@@ -63,9 +64,9 @@ EiScreen::EiScreen(bool isPrimary, IEventQueue *events, bool usePortal)
       m_events->addHandler(EventTypes::EISessionClosed, getEventTarget(), [this](const auto &) {
         handlePortalSessionClosed();
       });
-      m_portalRemoteDesktop = new PortalRemoteDesktop(this, m_events);
       // Create clipboard for remote desktop (secondary screen)
       m_clipboard = new EiClipboard(kClipboardClipboard);
+      m_portalRemoteDesktop = new PortalRemoteDesktop(this, m_events);
     }
   } else {
     // Note: socket backend does not support reconnections
@@ -93,10 +94,9 @@ EiScreen::~EiScreen()
   cleanupEi();
 
   delete m_keyState;
-  delete m_clipboard;
-
   delete m_portalRemoteDesktop;
   delete m_portalInputCapture;
+  delete m_clipboard;
 }
 
 void EiScreen::eiLogEvent(ei_log_priority priority, const char *message) const
@@ -140,6 +140,8 @@ void EiScreen::initEi()
 
 void EiScreen::cleanupEi()
 {
+  m_gestureHandler.reset();
+  cancelIdleEmulationTimer();
   if (m_eiPointer) {
     free(ei_device_get_user_data(m_eiPointer));
     ei_device_set_user_data(m_eiPointer, nullptr);
@@ -340,6 +342,28 @@ void EiScreen::fakeMouseWheel(ScrollDelta delta) const
   ensureEmulating();
   ei_device_scroll_discrete(m_eiPointer, -delta.x, -delta.y);
   ei_device_frame(m_eiPointer, ei_now(m_ei));
+  logScrollTiming("submit", delta.x, delta.y);
+}
+
+void EiScreen::fakeGesture(const GestureEvent &event)
+{
+  if (m_isPrimary || !m_isOnScreen || !m_eiKeyboard)
+    return;
+
+  LOGC(
+      Settings::value(Settings::Log::GestureDiagnostics).toBool(),
+      (CLOG_INFO "gesture.wayland inject type=%d phase=%d fingers=%u", static_cast<int>(event.type),
+       static_cast<int>(event.phase), event.fingers)
+  );
+  m_gestureHandler.handle(event);
+  if (m_gestureHandler.isActive())
+    cancelIdleEmulationTimer();
+}
+
+void EiScreen::fakeAllKeysUp()
+{
+  m_gestureHandler.reset();
+  PlatformScreen::fakeAllKeysUp();
 }
 
 void EiScreen::fakeKey(uint32_t keycode, bool isDown) const
@@ -363,6 +387,7 @@ void EiScreen::enable()
 
 void EiScreen::disable()
 {
+  m_gestureHandler.reset();
   // Nothing to do here
   // Portal-based clipboard gets notifications via events
   // Socket-based clipboard is passive (no monitoring needed)
@@ -391,6 +416,7 @@ void EiScreen::ensureEmulating() const
     if (m_eiAbs)
       ei_device_start_emulating(m_eiAbs, m_sequenceNumber);
     m_isEmulating = true;
+    logScrollTiming("emulation-start");
   }
 
   cancelIdleEmulationTimer();
@@ -413,6 +439,7 @@ void EiScreen::stopEmulating() const
   if (m_eiAbs)
     ei_device_stop_emulating(m_eiAbs);
   m_isEmulating = false;
+  logScrollTiming("emulation-stop");
 }
 
 void EiScreen::enter()
@@ -436,6 +463,7 @@ bool EiScreen::canLeave()
 
 void EiScreen::leave()
 {
+  m_gestureHandler.reset();
   if (!m_isPrimary) {
     stopEmulating();
   }
@@ -459,11 +487,11 @@ bool EiScreen::setClipboard(ClipboardID id, const IClipboard *clipboard)
   }
 
   // Otherwise use our own clipboard
-  if (!m_clipboard) {
+  if (!m_clipboard || id != kClipboardClipboard) {
     return false;
   }
 
-  bool ok = IClipboard::copy(m_clipboard, clipboard);
+  bool ok = m_clipboard->assign(clipboard);
 
   if (ok && m_portalRemoteDesktop && id == kClipboardClipboard) {
     m_portalRemoteDesktop->claimClipboard();
@@ -508,7 +536,7 @@ void EiScreen::setOptions(const OptionsList &options)
       if (it == options.end())
         break;
       m_maximumClipboardSize = *it;
-      LOG_DEBUG("ei screen received clipboard size limit: %zu KB", m_maximumClipboardSize);
+      LOG_INFO("clipboard sharing limit advertised by server: %zu KiB", m_maximumClipboardSize);
     }
   }
 }
@@ -622,6 +650,7 @@ void EiScreen::removeDevice(struct ei_device *device)
     wasTracked = true;
   }
   if (device == m_eiKeyboard) {
+    m_gestureHandler.reset();
     m_eiKeyboard = ei_device_unref(m_eiKeyboard);
     wasTracked = true;
   }

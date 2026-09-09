@@ -215,6 +215,51 @@ void ClipboardTests::unMarshalTextAndHtml()
   clipboard.close();
 }
 
+void ClipboardTests::unMarshalTakesSinglePayload()
+{
+  for (const auto format : {IClipboard::Format::Text, IClipboard::Format::HTML, IClipboard::Format::Bitmap}) {
+    Clipboard source;
+    const std::string payload(512 * 1024, 'x');
+    source.open(0);
+    source.add(format, payload);
+    source.close();
+    auto encoded = source.marshall();
+    Clipboard target;
+    target.unmarshall(std::move(encoded), 42);
+    QVERIFY(encoded.empty());
+    QCOMPARE(target.getTime(), 42);
+    target.open(0);
+    QCOMPARE(target.get(format), payload);
+    target.close();
+  }
+}
+
+void ClipboardTests::unMarshalMovedMultipleAndTruncatedFormats()
+{
+  Clipboard source;
+  source.open(0);
+  source.add(IClipboard::Format::Text, kTestString1);
+  source.add(IClipboard::Format::HTML, kTestString2);
+  source.close();
+  auto encoded = source.marshall();
+  Clipboard target;
+  target.unmarshall(std::move(encoded), 42);
+  target.open(0);
+  QCOMPARE(target.get(IClipboard::Format::Text), kTestString1);
+  QCOMPARE(target.get(IClipboard::Format::HTML), kTestString2);
+  target.close();
+  source.open(0);
+  source.empty();
+  source.add(IClipboard::Format::Bitmap, kTestString1);
+  source.close();
+  encoded = source.marshall();
+  encoded.pop_back();
+  target.unmarshall(std::move(encoded), 43);
+  target.open(0);
+  QVERIFY(!target.has(IClipboard::Format::Bitmap));
+  target.close();
+}
+
 void ClipboardTests::equalClipboards()
 {
   Clipboard clipboard1;

@@ -6,6 +6,7 @@
 
 #include "platform/EiClipboard.h"
 #include "base/Log.h"
+#include <array>
 
 namespace deskflow {
 
@@ -25,6 +26,7 @@ bool EiClipboard::empty()
   }
 
   // Clear all data
+  ++m_revision;
   for (int32_t index = 0; index < static_cast<int>(Format::TotalFormats); ++index) {
     m_data[index] = "";
     m_added[index] = false;
@@ -59,12 +61,8 @@ void EiClipboard::add(Format format, const std::string &data)
 
 bool EiClipboard::open(Time time) const
 {
-  std::scoped_lock lock{m_mutex};
-  if (m_open) {
-    LOG_DEBUG("skipping clipboard open, already open");
-    return true;
-  }
-
+  m_mutex.lock();
+  ++m_openDepth;
   m_open = true;
   m_time = time;
 
@@ -73,16 +71,57 @@ bool EiClipboard::open(Time time) const
 
 void EiClipboard::close() const
 {
-  std::scoped_lock lock{m_mutex};
-  if (!m_open) {
-    LOG_WARN("clipboard is not open");
-  }
-  m_open = false;
+  m_open = --m_openDepth != 0;
+  m_mutex.unlock();
 }
 
 EiClipboard::Time EiClipboard::getTime() const
 {
+  std::scoped_lock lock{m_mutex};
   return m_timeOwned;
+}
+
+uint64_t EiClipboard::revision() const
+{
+  std::scoped_lock lock{m_mutex};
+  return m_revision;
+}
+
+bool EiClipboard::assign(const IClipboard *source)
+{
+  std::array<std::string, static_cast<int>(Format::TotalFormats)> incoming;
+  std::array<bool, static_cast<int>(Format::TotalFormats)> formats;
+  const auto timestamp = source->getTime();
+  if (!source->open(timestamp))
+    return false;
+  for (size_t index = 0; index < incoming.size(); ++index) {
+    const auto format = static_cast<Format>(index);
+    formats[index] = source->has(format);
+    if (formats[index])
+      incoming[index] = source->get(format);
+  }
+  source->close();
+  std::scoped_lock lock{m_mutex};
+  ++m_revision;
+  m_timeOwned = timestamp;
+  m_owner = true;
+  for (size_t index = 0; index < incoming.size(); ++index) {
+    m_added[index] = formats[index];
+    m_data[index] = std::move(incoming[index]);
+  }
+  return true;
+}
+
+bool EiClipboard::replaceIfCurrent(uint64_t revision, Format format, const std::string &data)
+{
+  std::scoped_lock lock{m_mutex};
+  if (revision != m_revision)
+    return false;
+  for (int index = 0; index < static_cast<int>(Format::TotalFormats); ++index) {
+    m_added[index] = index == static_cast<int>(format);
+    m_data[index] = m_added[index] ? data : std::string();
+  }
+  return true;
 }
 
 bool EiClipboard::has(Format format) const

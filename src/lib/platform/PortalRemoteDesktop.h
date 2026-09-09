@@ -14,8 +14,11 @@
 #include <libportal/portal.h>
 
 #include <QByteArray>
+#include <memory>
 
 namespace deskflow {
+
+class PortalClipboardPublisher;
 
 class PortalRemoteDesktop
 {
@@ -56,6 +59,9 @@ private:
   IEventQueue *m_events;
 
   Thread *m_glibThread;
+#ifdef HAVE_LIBPORTAL_CLIPBOARD
+  std::unique_ptr<PortalClipboardPublisher> m_clipboardPublisher;
+#endif
   GMainLoop *m_glibMainLoop = nullptr;
 
   XdpPortal *m_portal = nullptr;

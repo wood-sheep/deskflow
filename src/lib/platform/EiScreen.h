@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "platform/EiGestureHandler.h"
+
 #include "deskflow/IScreen.h"
 #include "deskflow/PlatformScreen.h"
 #include "platform/XDGPowerManager.h"
@@ -63,6 +65,8 @@ public:
   void fakeMouseMove(std::int32_t x, std::int32_t y) override;
   void fakeMouseRelativeMove(std::int32_t dx, std::int32_t dy) const override;
   void fakeMouseWheel(ScrollDelta delta) const override;
+  void fakeGesture(const GestureEvent &event) override;
+  void fakeAllKeysUp() override;
   void fakeKey(std::uint32_t keycode, bool isDown) const;
 
   // IPlatformScreen overrides
@@ -141,12 +145,13 @@ private:
 
   // keyboard stuff
   EiKeyState *m_keyState = nullptr;
+  EiGestureHandler m_gestureHandler{[this](uint32_t key, bool down) { fakeKey(key, down); }};
 
   KeyID m_lastPressed = kKeyNone;
 
   // clipboard stuff
   EiClipboard *m_clipboard = nullptr;
-  size_t m_maximumClipboardSize = INT_MAX;
+  size_t m_maximumClipboardSize = 10 * 1024;
 
   std::vector<ei_device *> m_eiDevices;
 

@@ -27,6 +27,29 @@ elseif(APPLE)
 elseif(UNIX)
   if(LIBEI_FOUND)
     create_test(
+      NAME EiGestureHandlerTests
+      DEPENDS platform
+      LIBS base arch
+      SOURCE EiGestureHandlerTests.cpp
+      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/platform"
+    )
+    if(HAVE_LP_CLIPBOARD)
+      create_test(
+        NAME PortalClipboardPublisherTests
+        DEPENDS platform
+        LIBS base arch
+        SOURCE PortalClipboardPublisherTests.cpp
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/platform"
+      )
+      create_test(
+        NAME PortalClipboardTests
+        DEPENDS platform
+        LIBS base arch
+        SOURCE PortalClipboardTests.cpp
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/platform"
+      )
+    endif()
+    create_test(
       NAME EiKeyStateTests
       DEPENDS platform
       LIBS base arch

@@ -19,6 +19,13 @@ if(UNIX AND NOT APPLE)
   check_symbol_exists(xdp_input_capture_session_get_restore_token "libportal/inputcapture.h" HAVE_IC_RESTORE)
   check_symbol_exists(xdp_session_request_clipboard "libportal/portal-helpers.h;libportal/clipboard.h" HAVE_LP_CLIPBOARD)
   cmake_pop_check_state()
+  option(REQUIRE_PORTAL_CLIPBOARD "Fail if Wayland clipboard support is unavailable" OFF)
+  if(NOT HAVE_LP_CLIPBOARD)
+    if(REQUIRE_PORTAL_CLIPBOARD)
+      message(FATAL_ERROR "Wayland clipboard sharing requires libportal with the Clipboard API")
+    endif()
+    message(WARNING "Wayland clipboard sharing is disabled: libportal lacks the Clipboard API")
+  endif()
 endif()
 
 if(WIN32)
@@ -149,6 +156,8 @@ elseif(UNIX)
     list(APPEND PLATFORM_SOURCES
       EiClipboard.cpp
       EiClipboard.h
+      EiGestureHandler.cpp
+      EiGestureHandler.h
       EiEventQueueBuffer.cpp
       EiEventQueueBuffer.h
       EiKeyState.cpp
@@ -168,6 +177,8 @@ elseif(UNIX)
         list(APPEND PLATFORM_SOURCES
           PortalClipboard.cpp
           PortalClipboard.h
+          PortalClipboardPublisher.cpp
+          PortalClipboardPublisher.h
         )
       endif()
     endif()

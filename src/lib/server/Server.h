@@ -417,7 +417,7 @@ private:
 #endif
 
   IEventQueue *m_events = nullptr;
-  size_t m_maximumClipboardSize = INT_MAX;
+  size_t m_maximumClipboardSize = 10 * 1024;
   ClientListener *m_clientListener = nullptr;
   Stopwatch m_switchTwoTapTimer;
 

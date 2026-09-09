@@ -27,6 +27,10 @@ const void *StreamBuffer::peek(uint32_t n)
 
   // reserve space in first chunk
   auto head = m_chunks.begin();
+  if (m_headUsed != 0 && head->size() - m_headUsed < n) {
+    head->erase(head->begin(), head->begin() + m_headUsed);
+    m_headUsed = 0;
+  }
   head->reserve(n + m_headUsed);
 
   // consolidate chunks into the first chunk until it has n bytes

@@ -38,13 +38,18 @@ public:
   Time getTime() const override;
   bool has(Format) const override;
   std::string get(Format) const override;
+  bool assign(const IClipboard *source);
+  uint64_t revision() const;
+  bool replaceIfCurrent(uint64_t revision, Format format, const std::string &data);
   //@}
 
 private:
   ClipboardID m_id;
   mutable bool m_open = false;
   mutable Time m_time = 0;
-  mutable std::mutex m_mutex;
+  mutable std::recursive_mutex m_mutex;
+  mutable unsigned m_openDepth = 0;
+  uint64_t m_revision = 0;
   bool m_owner = false;
   Time m_timeOwned = 0;
   bool m_added[static_cast<int>(Format::TotalFormats)] = {false, false, false};

@@ -118,6 +118,10 @@ public:
   a successful open() and close().
   */
   virtual std::string get(Format) const = 0;
+  virtual size_t getSize(Format format) const
+  {
+    return get(format).size();
+  }
 
   //! Marshall clipboard data
   /*!

@@ -8,6 +8,8 @@
 #include "deskflow/Clipboard.h"
 #include "base/Log.h"
 
+#include <QtEndian>
+
 //
 // Clipboard
 //
@@ -111,6 +113,33 @@ std::string Clipboard::get(Format format) const
 void Clipboard::unmarshall(const std::string &data, Time time)
 {
   IClipboard::unmarshall(this, data, time);
+}
+
+void Clipboard::unmarshall(std::string &&data, Time time)
+{
+  if (data.size() < 12 || qFromBigEndian<quint32>(data.data()) != 1 ||
+      qFromBigEndian<quint32>(data.data() + 4) >= static_cast<uint32_t>(Format::TotalFormats) ||
+      qFromBigEndian<quint32>(data.data() + 8) != data.size() - 12) {
+    IClipboard::unmarshall(this, data, time);
+    return;
+  }
+  const auto format = qFromBigEndian<quint32>(data.data() + 4);
+  data.erase(0, 12);
+  open(time);
+  empty();
+  {
+    std::scoped_lock lock{m_mutex};
+    m_data[format] = std::move(data);
+    m_added[format] = true;
+  }
+  data.clear();
+  close();
+}
+
+size_t Clipboard::getSize(Format format) const
+{
+  std::scoped_lock lock{m_mutex};
+  return m_open ? m_data[static_cast<int>(format)].size() : 0;
 }
 
 std::string Clipboard::marshall() const

@@ -9,6 +9,7 @@
 #include "deskflow/IClipboard.h"
 
 #include <QByteArray>
+#include <QImage>
 
 #include <libportal/portal.h>
 
@@ -42,6 +43,8 @@ public:
   static QByteArray encodeFormat(IClipboard::Format format, const QByteArray &data);
   static QByteArray decodeFormat(IClipboard::Format format, const QByteArray &bytes);
   static QByteArray readSelectionBytes(XdpSession *session, const char *mime, qint64 maxBytes);
+  static QByteArray readPipeBytes(int fd, qint64 maxBytes);
+  static bool writeSelectionBytes(int fd, const QByteArray &data);
 
   /// Advertise the cache's formats to the portal selection.
   static void claimOwnership(EiClipboard *cache, XdpSession *session);
@@ -56,6 +59,8 @@ public:
   readSelectionIntoCache(EiClipboard *cache, XdpSession *session, const char *const *mimeTypes, qint64 maxBytes);
 
 private:
+  static QImage readBoundedImage(const QByteArray &bytes, const QByteArray &format);
+  static bool publishWithHelper(EiClipboard *cache);
   static QByteArray dibToBmp(const QByteArray &dib);
   static QByteArray bmpToDib(const QByteArray &bmp);
 };

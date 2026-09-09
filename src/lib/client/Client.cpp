@@ -8,6 +8,9 @@
 
 #include "client/Client.h"
 
+#include "deskflow/ClipboardLimits.h"
+#include "deskflow/ScrollDiagnostics.h"
+
 #include "arch/Arch.h"
 #include "base/IEventQueue.h"
 #include "base/Log.h"
@@ -219,6 +222,7 @@ void Client::getCursorPos(int32_t &x, int32_t &y) const
 
 void Client::enter(int32_t xAbs, int32_t yAbs, uint32_t, KeyModifierMask mask, bool)
 {
+  deskflow::logScrollTiming("enter", xAbs, yAbs);
   m_active = true;
   if (m_relativeMouseMoves && m_hasRelativeRestorePosition) {
     xAbs = m_relativeRestoreX;
@@ -400,6 +404,11 @@ void Client::sendClipboard(ClipboardID id)
     clipboard.close();
   }
   m_screen->getClipboard(id, &clipboard);
+
+  if (!deskflow::ClipboardLimits::allows(&clipboard)) {
+    LOG_WARN("not sending clipboard exceeding text or image limits");
+    return;
+  }
 
   // check time
   if (m_timeClipboard[id] == 0 || clipboard.getTime() != m_timeClipboard[id]) {

@@ -6,10 +6,26 @@ if(WIN32)
 endif()
 
 create_test(
+  NAME PacketStreamFilterTests
+  DEPENDS app
+  LIBS arch base io ${extra_libs}
+  SOURCE PacketStreamFilterTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/deskflow"
+)
+
+create_test(
   NAME ClipboardTests
   DEPENDS app
   LIBS arch base io ${extra_libs}
   SOURCE ClipboardTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/deskflow"
+)
+
+create_test(
+  NAME StreamBufferTests
+  DEPENDS io
+  LIBS arch base mt ${extra_libs}
+  SOURCE StreamBufferTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/deskflow"
 )
 
@@ -62,4 +78,3 @@ if(BUILD_X11_SUPPORT)
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/deskflow"
   )
 endif()
-

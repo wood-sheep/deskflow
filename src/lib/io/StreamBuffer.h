@@ -58,6 +58,7 @@ public:
   //@}
 
 private:
+  friend class StreamBufferTests;
   static const uint32_t kChunkSize;
 
   using Chunk = std::vector<uint8_t>;

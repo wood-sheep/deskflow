@@ -129,7 +129,7 @@ bool PacketStreamFilter::readMore()
   bool wasReady = isReadyNoLock();
 
   // read more data
-  char buffer[4096];
+  char buffer[64 * 1024];
   uint32_t n = getStream()->read(buffer, sizeof(buffer));
   while (n > 0) {
     m_buffer.write(buffer, n);

@@ -20,6 +20,10 @@ private Q_SLOTS:
   void assembleAllowsDataAtExpectedSizeAndLimit();
   void assembleRejectsDataBeyondExpectedSize();
   void assembleRejectsExpectedSizeBeyondLimit();
+  void skipsOversizedDataWithoutCachingAndAcceptsNextClipboard();
+  void skippedTransferStillRejectsOverflow();
+  void skippedTransferStillRejectsTruncation();
+  void skipWithZeroLimit();
 
 private:
   Log m_log;
