@@ -37,6 +37,8 @@ add_library(${lib_name} STATIC ${PLATFORM_CODE}
   Clipboard.h
   ClipboardChunk.cpp
   ClipboardChunk.h
+  ClipboardChunkPacer.h
+  TurnBudget.h
   DeskflowException.cpp
   DeskflowException.h
   DisplayInvalidException.h
@@ -88,6 +90,8 @@ add_library(${lib_name} STATIC ${PLATFORM_CODE}
   ipc/CoreIpc.h
   ipc/CoreIpcServer.cpp
   ipc/CoreIpcServer.h
+  ipc/ClipboardTransferReporter.cpp
+  ipc/ClipboardTransferReporter.h
 )
 
 target_link_libraries(${lib_name} PUBLIC common Qt6::Core Qt6::Network)

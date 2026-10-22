@@ -24,6 +24,8 @@ private Q_SLOTS:
   void skippedTransferStillRejectsOverflow();
   void skippedTransferStillRejectsTruncation();
   void skipWithZeroLimit();
+  void assembleReservesExpectedSize();
+  void assembleDoesNotReserveBeyondLimit();
 
 private:
   Log m_log;

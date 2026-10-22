@@ -22,11 +22,15 @@
 #include "deskflow/ProtocolTypes.h"
 #include "deskflow/ProtocolUtil.h"
 #include "deskflow/StreamChunker.h"
+#include "deskflow/ipc/ClipboardTransferReporter.h"
 #include "deskflow/ipc/CoreIpc.h"
 #include "io/IStream.h"
 
 #include <climits>
 #include <cstring>
+
+using namespace deskflow::core;
+using deskflow::core::ipc::ClipboardTransferReporter;
 
 //
 // ServerProxy
@@ -48,8 +52,11 @@ ServerProxy::ServerProxy(Client *client, deskflow::IStream *stream, IEventQueue 
   m_events->addHandler(EventTypes::StreamInputReady, m_stream->getEventTarget(), [this](const auto &) {
     handleData();
   });
+  m_events->addHandler(EventTypes::StreamInputContinue, this, [this](const auto &) {
+    handleData();
+  });
   m_events->addHandler(EventTypes::ClipboardSending, this, [this](const auto &e) {
-    ClipboardChunk::send(m_stream, e.getDataObject());
+    StreamChunker::handleEvent(m_stream, e.getDataObject());
   });
 
   // send heartbeat
@@ -58,8 +65,12 @@ ServerProxy::ServerProxy(Client *client, deskflow::IStream *stream, IEventQueue 
 
 ServerProxy::~ServerProxy()
 {
+  if (m_clipboardSender != nullptr) {
+    m_clipboardSender->detach();
+  }
   setKeepAliveRate(-1.0);
   m_events->removeHandler(EventTypes::StreamInputReady, m_stream->getEventTarget());
+  m_events->removeHandler(EventTypes::StreamInputContinue, this);
   m_events->removeHandler(EventTypes::ClipboardSending, this);
 }
 
@@ -84,7 +95,10 @@ void ServerProxy::setKeepAliveRate(double rate)
 
 void ServerProxy::handleData()
 {
-  // handle messages until there are no more.  first read message code.
+  // handle messages until there are no more or this turn's budget is spent.
+  m_turnBudget.beginTurn();
+  bool budgetExhausted = false;
+
   uint8_t code[4];
   uint32_t n = m_stream->read(code, 4);
   while (n != 0) {
@@ -121,11 +135,24 @@ void ServerProxy::handleData()
       return;
     }
 
+    if (!m_turnBudget.consume(m_stream->getSize())) {
+      budgetExhausted = true;
+      break;
+    }
+
     // next message
     n = m_stream->read(code, 4);
   }
 
   flushCompressedMouse();
+
+  // Large clipboard payloads arrive back to back; hand the rest of the
+  // buffered data to a later turn so queued input events are not starved.
+  // This must not go through the stream: its filter only forwards the
+  // transition to "ready" and would swallow a continuation.
+  if (budgetExhausted && m_stream->isReady()) {
+    m_events->addEvent(Event(EventTypes::StreamInputContinue, this));
+  }
 }
 
 ServerProxy::ConnectionResult ServerProxy::parseHandshakeMessage(const uint8_t *code)
@@ -386,7 +413,23 @@ void ServerProxy::onClipboardChanged(ClipboardID id, const IClipboard *clipboard
   std::string data = IClipboard::marshall(clipboard);
   LOG_DEBUG("sending clipboard %d seqnum=%d", id, m_seqNum);
 
-  StreamChunker::sendClipboard(data, data.size(), id, m_seqNum, m_events, this);
+  if (m_clipboardSender != nullptr) {
+    m_clipboardSender->cancel();
+  }
+
+  m_sendActive = true;
+  m_client->setActiveTransfer(id, ClipboardTransferDirection::Send);
+  m_clipboardSender = StreamChunker::sendClipboard(
+      m_stream, std::move(data), id, m_seqNum, m_events, this,
+      [this, id](uint64_t done, uint64_t total) {
+        const auto phase = done >= total ? ClipboardTransferPhase::Done : ClipboardTransferPhase::Active;
+        reportClipboardTransfer(ClipboardTransferDirection::Send, phase, id, done, total);
+        if (phase == ClipboardTransferPhase::Done) {
+          m_sendActive = false;
+          m_client->clearActiveTransfer();
+        }
+      }
+  );
 }
 
 void ServerProxy::flushCompressedMouse()
@@ -564,9 +607,24 @@ void ServerProxy::setClipboard()
     deskflow::logScrollTiming("clipboard-receive-start");
     size_t size = ClipboardChunk::getExpectedSize(m_clipboardChunkState);
     LOG_DEBUG("receiving clipboard %d size=%zu", id, size);
+    m_client->setActiveTransfer(id, ClipboardTransferDirection::Receive);
+    reportClipboardReceive(ClipboardTransferPhase::Active, id, 0, size);
+  } else if (r == TransferState::InProgress) {
+    reportClipboardReceive(
+        ClipboardTransferPhase::Active, id, m_clipboardChunkState.receivedSize, m_clipboardChunkState.expectedSize
+    );
+  } else if (r == TransferState::Skipped) {
+    // The peer sent data above the receive limit; the stream is left intact.
+    m_client->clearActiveTransfer();
+    reportClipboardReceive(
+        ClipboardTransferPhase::Failed, id, m_clipboardChunkState.receivedSize, m_clipboardChunkState.expectedSize,
+        ClipboardTransferFailure::Oversize
+    );
   } else if (r == TransferState::Finished) {
     deskflow::logScrollTiming("clipboard-assembled");
     LOG_DEBUG("received clipboard %d size=%zu", id, m_clipboardDataCached.size());
+    m_client->clearActiveTransfer();
+    reportClipboardReceive(ClipboardTransferPhase::Done, id, m_clipboardDataCached.size(), m_clipboardDataCached.size());
 
     // forward
     Clipboard clipboard;
@@ -583,8 +641,40 @@ void ServerProxy::setClipboard()
     m_clipboardDataCached.shrink_to_fit();
 
   } else if (r == TransferState::Error) {
+    m_client->clearActiveTransfer();
+    reportClipboardReceive(
+        ClipboardTransferPhase::Failed, id, m_clipboardDataCached.size(), m_clipboardChunkState.expectedSize,
+        ClipboardTransferFailure::Corrupt
+    );
     requestDisconnect("invalid clipboard data from server");
   }
+}
+
+bool ServerProxy::hasActiveTransfer() const
+{
+  return m_sendActive || m_clipboardChunkState.active;
+}
+
+void ServerProxy::reportClipboardReceive(
+    ClipboardTransferPhase phase, ClipboardID id, uint64_t done, uint64_t total, ClipboardTransferFailure failure
+)
+{
+  reportClipboardTransfer(ClipboardTransferDirection::Receive, phase, id, done, total, failure);
+}
+
+void ServerProxy::reportClipboardTransfer(
+    ClipboardTransferDirection direction, ClipboardTransferPhase phase, ClipboardID id, uint64_t done, uint64_t total,
+    ClipboardTransferFailure failure
+)
+{
+  ClipboardTransferStatus status;
+  status.direction = direction;
+  status.clipboardId = id;
+  status.phase = phase;
+  status.done = done;
+  status.total = total;
+  status.failure = failure;
+  ClipboardTransferReporter::instance().report(status);
 }
 
 void ServerProxy::grabClipboard()

@@ -176,6 +176,23 @@ void IpcServer::broadcastCommand(const QString &command, const QString &args)
   }
 }
 
+void IpcServer::broadcastTransientCommand(const QString &command, const QString &args)
+{
+  if (m_clients.isEmpty()) {
+    return;
+  }
+
+  const auto message = args.isEmpty() ? command : QStringLiteral("%1=%2").arg(command, args);
+  LOG_VERBOSE(
+      "%s ipc server broadcasting transient message to %d clients: %s", m_typeName.constData(), m_clients.size(),
+      message.toUtf8().constData()
+  );
+  for (auto *client : std::as_const(m_clients)) {
+    writeToClientSocket(client, message);
+    client->flush();
+  }
+}
+
 void IpcServer::writeToClientSocket(QLocalSocket *&clientSocket, const QString &message) const
 {
   QByteArray messageData = message.toUtf8() + '\n';

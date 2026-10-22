@@ -10,15 +10,24 @@
 
 #include <QEvent>
 #include <QLabel>
+#include <QLocale>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QTimer>
+
+using deskflow::core::ClipboardTransferDirection;
+using deskflow::core::ClipboardTransferFailure;
+using deskflow::core::ClipboardTransferPhase;
 
 StatusBar::StatusBar(QWidget *parent)
     : QStatusBar{parent},
       m_btnFingerprint{new QPushButton(this)},
       m_lblSecurityIcon{new QLabel(this)},
       m_lblStatus{new QLabel(this)},
+      m_lblClipboard{new QLabel(this)},
+      m_progressClipboard{new QProgressBar(this)},
       m_btnUpdate{new QPushButton(this)},
+      m_clipboardHideTimer{new QTimer(this)},
       m_retryTimer{new QTimer(this)}
 {
   static const auto btnHeight = height() - 2;
@@ -40,18 +49,30 @@ StatusBar::StatusBar(QWidget *parent)
   m_lblStatus->setText(tr("%1 is not running").arg(kAppName));
   insertPermanentWidget(2, m_lblStatus, 1);
 
+  m_lblClipboard->setVisible(false);
+  insertPermanentWidget(3, m_lblClipboard);
+  m_progressClipboard->setVisible(false);
+  m_progressClipboard->setFixedWidth(120);
+  m_progressClipboard->setFixedHeight(btnHeight);
+  m_progressClipboard->setTextVisible(false);
+  m_progressClipboard->setToolTip(tr("Clipboard transfer progress"));
+  insertPermanentWidget(4, m_progressClipboard);
+
   m_btnUpdate->setVisible(false);
   m_btnUpdate->setFlat(true);
   m_btnUpdate->setLayoutDirection(Qt::RightToLeft);
   m_btnUpdate->setIcon(QIcon::fromTheme(QStringLiteral("software-updates-release")));
   m_btnUpdate->setFixedHeight(btnHeight);
   m_btnUpdate->setIconSize(iconSize);
-  insertPermanentWidget(3, m_btnUpdate);
+  insertPermanentWidget(5, m_btnUpdate);
   connect(m_btnUpdate, &QPushButton::clicked, this, &StatusBar::requestUpdateVersion);
 
   m_retryTimer->setInterval(1000);
   m_retryTimer->setSingleShot(false);
   connect(m_retryTimer, &QTimer::timeout, this, &StatusBar::updateTimerLabel);
+
+  m_clipboardHideTimer->setSingleShot(true);
+  connect(m_clipboardHideTimer, &QTimer::timeout, this, &StatusBar::hideClipboardTransfer);
 
   updateText();
   adjustSize();
@@ -167,6 +188,101 @@ void StatusBar::updateFound(const QString &version)
 {
   m_btnUpdate->setVisible(true);
   m_btnUpdate->setToolTip(tr("A new version v%1 is available").arg(version));
+}
+
+void StatusBar::setClipboardTransfer(const ClipboardTransferStatus &status)
+{
+  using enum ClipboardTransferPhase;
+
+  if (status.phase == Done || status.phase == Cancelled || status.phase == Failed) {
+    // A zero-size "done" only clears a preparing state (nothing was transferred).
+    if (status.phase == Cancelled || (status.phase == Done && status.total == 0)) {
+      hideClipboardTransfer();
+      return;
+    }
+
+    m_lblClipboard->setText(clipboardTransferText(status));
+    m_lblClipboard->setVisible(true);
+    m_progressClipboard->setVisible(status.phase == Failed);
+    if (status.phase == Failed) {
+      m_progressClipboard->setRange(0, 1);
+      m_progressClipboard->setValue(1);
+    }
+
+    // Keep the outcome visible long enough to read it.
+    m_clipboardHideTimer->start(status.phase == Failed ? 8000 : 3000);
+    return;
+  }
+
+  m_clipboardHideTimer->stop();
+  m_lblClipboard->setText(clipboardTransferText(status));
+  m_lblClipboard->setVisible(true);
+  m_progressClipboard->setVisible(true);
+
+  if (status.phase == Preparing || status.total == 0) {
+    m_progressClipboard->setRange(0, 0); // indeterminate
+  } else {
+    // Use permille so small percentage steps still move the bar.
+    constexpr int kPermille = 1000;
+    m_progressClipboard->setRange(0, kPermille);
+    m_progressClipboard->setValue(static_cast<int>(status.done * kPermille / status.total));
+  }
+}
+
+QString StatusBar::clipboardTransferText(const ClipboardTransferStatus &status)
+{
+  using enum ClipboardTransferPhase;
+
+  const bool sending = status.direction == ClipboardTransferDirection::Send;
+  switch (status.phase) {
+  case Preparing:
+    return sending ? tr("Preparing to send clipboard…") : tr("Receiving clipboard…");
+
+  case Active: {
+    if (status.total == 0) {
+      return sending ? tr("Sending clipboard…") : tr("Receiving clipboard…");
+    }
+    return sending
+               ? tr("Sending clipboard %1 of %2").arg(formatBytes(status.done), formatBytes(status.total))
+               : tr("Receiving clipboard %1 of %2").arg(formatBytes(status.done), formatBytes(status.total));
+  }
+
+  case Done:
+    return sending ? tr("Clipboard sent (%1)").arg(formatBytes(status.total))
+                   : tr("Clipboard received (%1)").arg(formatBytes(status.total));
+
+  case Failed:
+    switch (status.failure) {
+    case ClipboardTransferFailure::Oversize:
+      return tr("Clipboard not shared: data exceeds the configured size limit");
+    case ClipboardTransferFailure::Corrupt:
+      return tr("Clipboard transfer failed: data was corrupt");
+    case ClipboardTransferFailure::PeerDisconnected:
+      return tr("Clipboard transfer failed: the other machine disconnected");
+    case ClipboardTransferFailure::None:
+      return tr("Clipboard transfer failed");
+    }
+    break;
+
+  case Cancelled:
+    break;
+  }
+
+  return tr("Clipboard transfer");
+}
+
+QString StatusBar::formatBytes(quint64 bytes)
+{
+  return QLocale().formattedDataSize(static_cast<qint64>(bytes));
+}
+
+void StatusBar::hideClipboardTransfer()
+{
+  m_lblClipboard->clear();
+  m_lblClipboard->setVisible(false);
+  m_progressClipboard->setVisible(false);
+  m_progressClipboard->setRange(0, 1);
+  m_progressClipboard->setValue(0);
 }
 
 void StatusBar::changeEvent(QEvent *e)

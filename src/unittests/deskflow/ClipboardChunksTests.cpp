@@ -367,4 +367,37 @@ void ClipboardChunksTests::skipWithZeroLimit()
   QVERIFY(cached.empty());
 }
 
+void ClipboardChunksTests::assembleReservesExpectedSize()
+{
+  constexpr size_t payloadSize = 1024 * 1024;
+
+  MemoryStream stream;
+  stream.push(encodeClipboardMsg(0, 7, ChunkType::DataStart, std::to_string(payloadSize)));
+
+  std::string cached;
+  ClipboardID id = kClipboardEnd;
+  uint32_t seq = 0;
+  ClipboardChunkAssemblyState state;
+
+  QCOMPARE(ClipboardChunk::assemble(&stream, cached, id, seq, state, payloadSize, true), TransferState::Started);
+
+  // Capacity is reserved up front so per-chunk appends never reallocate.
+  QVERIFY(cached.empty());
+  QVERIFY(cached.capacity() >= payloadSize);
+}
+
+void ClipboardChunksTests::assembleDoesNotReserveBeyondLimit()
+{
+  MemoryStream stream;
+  stream.push(encodeClipboardMsg(0, 7, ChunkType::DataStart, "1024"));
+
+  std::string cached;
+  ClipboardID id = kClipboardEnd;
+  uint32_t seq = 0;
+  ClipboardChunkAssemblyState state;
+
+  QCOMPARE(ClipboardChunk::assemble(&stream, cached, id, seq, state, 4), TransferState::Error);
+  QVERIFY(cached.capacity() < 1024);
+}
+
 QTEST_MAIN(ClipboardChunksTests)

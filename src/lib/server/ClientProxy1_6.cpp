@@ -10,8 +10,13 @@
 #include "deskflow/ClipboardChunk.h"
 #include "deskflow/ProtocolUtil.h"
 #include "deskflow/StreamChunker.h"
+#include "deskflow/ipc/ClipboardTransferReporter.h"
 #include "io/IStream.h"
 #include "server/Server.h"
+
+#include <utility>
+
+using namespace deskflow::core;
 
 //
 // ClientProxy1_6
@@ -22,12 +27,15 @@ ClientProxy1_6::ClientProxy1_6(const std::string &name, deskflow::IStream *strea
       m_events(events)
 {
   m_events->addHandler(EventTypes::ClipboardSending, this, [this](const auto &e) {
-    ClipboardChunk::send(getStream(), e.getDataObject());
+    StreamChunker::handleEvent(getStream(), e.getDataObject());
   });
 }
 
 ClientProxy1_6::~ClientProxy1_6()
 {
+  if (m_clipboardSender != nullptr) {
+    m_clipboardSender->detach();
+  }
   m_events->removeHandler(EventTypes::ClipboardSending, this);
 }
 
@@ -44,7 +52,18 @@ void ClientProxy1_6::setClipboard(ClipboardID id, const IClipboard *clipboard)
     size_t size = data.size();
     LOG_DEBUG("sending clipboard %d to \"%s\"", id, getName().c_str());
 
-    StreamChunker::sendClipboard(data, size, id, 0, m_events, this);
+    if (m_clipboardSender != nullptr) {
+      m_clipboardSender->cancel();
+    }
+
+    m_clipboardSender = StreamChunker::sendClipboard(
+        getStream(), std::move(data), id, 0, m_events, this,
+        [this, id](uint64_t done, uint64_t total) {
+          const auto phase = total != 0 && done >= total ? ClipboardTransferPhase::Done
+                                                        : ClipboardTransferPhase::Active;
+          reportTransfer(ClipboardTransferDirection::Send, phase, id, done, total);
+        }
+    );
   }
 }
 
@@ -61,10 +80,26 @@ bool ClientProxy1_6::recvClipboard()
   if (r == TransferState::Started) {
     size_t size = ClipboardChunk::getExpectedSize(m_clipboardChunkState);
     LOG_DEBUG("receiving clipboard %d size=%zu", id, size);
+    reportTransfer(ClipboardTransferDirection::Receive, ClipboardTransferPhase::Active, id, 0, size);
+  } else if (r == TransferState::InProgress) {
+    reportTransfer(
+        ClipboardTransferDirection::Receive, ClipboardTransferPhase::Active, id, m_clipboardChunkState.receivedSize,
+        m_clipboardChunkState.expectedSize
+    );
+  } else if (r == TransferState::Skipped) {
+    // The client sent data above the limit; the sequence stays readable.
+    reportTransfer(
+        ClipboardTransferDirection::Receive, ClipboardTransferPhase::Failed, id, m_clipboardChunkState.receivedSize,
+        m_clipboardChunkState.expectedSize, ClipboardTransferFailure::Oversize
+    );
   } else if (r == TransferState::Finished) {
     LOG(
         (CLOG_DEBUG "received client \"%s\" clipboard %d seqnum=%d, size=%zu", getName().c_str(), id, seq,
          m_clipboardDataCached.size())
+    );
+    reportTransfer(
+        ClipboardTransferDirection::Receive, ClipboardTransferPhase::Done, id, m_clipboardDataCached.size(),
+        m_clipboardDataCached.size()
     );
     // save clipboard
     m_clipboard[id].m_clipboard.unmarshall(m_clipboardDataCached, 0);
@@ -78,8 +113,32 @@ bool ClientProxy1_6::recvClipboard()
     info->m_sequenceNumber = seq;
     m_events->addEvent(Event(EventTypes::ClipboardChanged, getEventTarget(), info));
   } else if (r == TransferState::Error) {
+    reportTransfer(
+        ClipboardTransferDirection::Receive, ClipboardTransferPhase::Failed, id, 0,
+        m_clipboardChunkState.expectedSize, ClipboardTransferFailure::Corrupt
+    );
     return false;
   }
 
   return true;
+}
+
+bool ClientProxy1_6::hasActiveTransfer() const
+{
+  return m_clipboardChunkState.active || m_clipboardSender != nullptr;
+}
+
+void ClientProxy1_6::reportTransfer(
+    ClipboardTransferDirection direction, ClipboardTransferPhase phase, ClipboardID id, uint64_t done,
+    uint64_t total, ClipboardTransferFailure failure
+)
+{
+  ClipboardTransferStatus status;
+  status.direction = direction;
+  status.clipboardId = id;
+  status.phase = phase;
+  status.done = done;
+  status.total = total;
+  status.failure = failure;
+  deskflow::core::ipc::ClipboardTransferReporter::instance().report(status);
 }

@@ -25,6 +25,14 @@ public:
   void listen();
   void broadcastCommand(const QString &command, const QString &args = "");
 
+  /**!
+   * Broadcast a message that is only useful right now (e.g. transfer progress).
+   *
+   * Unlike broadcastCommand, the message is dropped when no client is
+   * connected instead of being queued for the next handshake.
+   */
+  void broadcastTransientCommand(const QString &command, const QString &args = "");
+
 Q_SIGNALS:
   void logLevelChanged(const QString &logLevel);
   void configFileChanged(const QString &configFile);

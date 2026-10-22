@@ -6,10 +6,14 @@
 
 #pragma once
 
+#include "common/Enums.h"
 #include "deskflow/ClipboardChunk.h"
+#include "deskflow/StreamChunker.h"
 #include "server/ClientProxy1_5.h"
 
+#include <memory>
 #include <string>
+
 
 class Server;
 class IEventQueue;
@@ -24,8 +28,17 @@ public:
   void setClipboard(ClipboardID id, const IClipboard *clipboard) override;
   bool recvClipboard() override;
 
+  //! True while clipboard data is still being received from or sent to the client.
+  bool hasActiveTransfer() const override;
+
 private:
+  void reportTransfer(
+      deskflow::core::ClipboardTransferDirection direction, deskflow::core::ClipboardTransferPhase phase, ClipboardID id, uint64_t done = 0,
+      uint64_t total = 0, deskflow::core::ClipboardTransferFailure failure = deskflow::core::ClipboardTransferFailure::None
+  );
+
   IEventQueue *m_events;
   std::string m_clipboardDataCached;
   ClipboardChunkAssemblyState m_clipboardChunkState;
+  std::shared_ptr<StreamChunker::Sender> m_clipboardSender;
 };

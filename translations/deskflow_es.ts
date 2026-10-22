@@ -477,6 +477,10 @@ Do you want to connect to the server?
         <translation>%1 Error de conexión</translation>
     </message>
     <message>
+        <source>Clipboard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>No IP Detected</source>
         <translation type="unfinished">No se detectó ninguna IP</translation>
     </message>
@@ -1335,6 +1339,10 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
         <translation type="unfinished">%1 no se está ejecutando</translation>
     </message>
     <message>
+        <source>Clipboard transfer progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>%1 is starting...</source>
         <translation type="unfinished">%1 está iniciando...</translation>
     </message>
@@ -1375,6 +1383,54 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
     <message>
         <source>A new version v%1 is available</source>
         <translation type="unfinished">Ya está disponible una nueva versión v%1</translation>
+    </message>
+    <message>
+        <source>Preparing to send clipboard…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Receiving clipboard…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sending clipboard…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sending clipboard %1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Receiving clipboard %1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clipboard sent (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clipboard received (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clipboard not shared: data exceeds the configured size limit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clipboard transfer failed: data was corrupt</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clipboard transfer failed: the other machine disconnected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clipboard transfer failed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clipboard transfer</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>View local fingerprint</source>

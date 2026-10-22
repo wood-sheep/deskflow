@@ -218,6 +218,9 @@ private:
   // get canonical name of client
   std::string getName(const BaseClientProxy *) const;
 
+  // tell the GUI that a clipboard update could not be shared
+  void reportClipboardOversize(ClipboardID id, const IClipboard &clipboard, uint64_t total = 0) const;
+
   // get the sides of the primary screen that have neighbors
   uint32_t getActivePrimarySides() const;
 

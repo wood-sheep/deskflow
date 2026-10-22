@@ -25,6 +25,7 @@
 #include "deskflow/ProtocolUtil.h"
 #include "deskflow/Screen.h"
 #include "deskflow/StreamChunker.h"
+#include "deskflow/ipc/ClipboardTransferReporter.h"
 #include "deskflow/ipc/CoreIpc.h"
 #include "net/IDataSocket.h"
 #include "net/ISocketFactory.h"
@@ -35,6 +36,8 @@
 
 #include <cstdlib>
 #include <cstring>
+
+using namespace deskflow::core;
 
 //
 // Client
@@ -416,6 +419,7 @@ void Client::sendClipboard(ClipboardID id)
     std::string data = clipboard.marshall();
     if (data.size() >= m_maximumClipboardSize * 1024) {
       LOG_WARN("not sending clipboard data, exceeds limit: %zu KB", m_maximumClipboardSize);
+      reportTransfer(ClipboardTransferPhase::Failed, id, data.size(), data.size(), ClipboardTransferFailure::Oversize);
       return;
     }
 
@@ -425,9 +429,24 @@ void Client::sendClipboard(ClipboardID id)
     if (!m_sentClipboard[id] || data != m_dataClipboard[id]) {
       m_sentClipboard[id] = true;
       m_dataClipboard[id] = data;
+      // The actual send reports Active/Done per chunk from ClientProxy1_6.
       m_server->onClipboardChanged(id, &clipboard);
     }
   }
+}
+
+void Client::reportTransfer(
+    ClipboardTransferPhase phase, ClipboardID id, uint64_t done, uint64_t total, ClipboardTransferFailure failure
+)
+{
+  ClipboardTransferStatus status;
+  status.direction = ClipboardTransferDirection::Send;
+  status.clipboardId = id;
+  status.phase = phase;
+  status.done = done;
+  status.total = total;
+  status.failure = failure;
+  deskflow::core::ipc::ClipboardTransferReporter::instance().report(status);
 }
 
 void Client::sendEvent(EventTypes type)
@@ -605,6 +624,7 @@ void Client::handleConnectTimeout()
 
 void Client::handleOutputError()
 {
+  reportInterruptedTransfer();
   cleanupTimer();
   cleanupScreen();
   cleanupConnection();
@@ -614,11 +634,26 @@ void Client::handleOutputError()
 
 void Client::handleDisconnected()
 {
+  reportInterruptedTransfer();
   cleanupTimer();
   cleanupScreen();
   cleanupConnection();
   LOG_VERBOSE("disconnected");
   sendEvent(EventTypes::ClientDisconnected);
+}
+
+void Client::reportInterruptedTransfer()
+{
+  if (m_server == nullptr || !m_server->hasActiveTransfer()) {
+    return;
+  }
+
+  ClipboardTransferStatus status;
+  status.direction = m_activeTransferDirection;
+  status.clipboardId = m_activeTransferId;
+  status.phase = ClipboardTransferPhase::Failed;
+  status.failure = ClipboardTransferFailure::PeerDisconnected;
+  deskflow::core::ipc::ClipboardTransferReporter::instance().report(status);
 }
 
 void Client::handleDisconnectRequested(const Event &event)

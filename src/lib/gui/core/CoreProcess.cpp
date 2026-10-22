@@ -616,6 +616,21 @@ void CoreProcess::onCoreIpcMessageReceived(const QString &command, const QString
     Q_EMIT peerFingerprint(args);
   } else if (command == "missingKeyboardLayouts") {
     Q_EMIT missingKeyboardLayouts(args);
+  } else if (command == "clipboardProgress") {
+    const auto fields = args.split(',');
+    if (fields.size() != 6) {
+      qWarning("core ipc got invalid clipboard progress message: %s", args.toUtf8().constData());
+      return;
+    }
+
+    deskflow::core::ClipboardTransferStatus status;
+    status.direction = static_cast<deskflow::core::ClipboardTransferDirection>(fields.at(0).toInt());
+    status.clipboardId = static_cast<uint8_t>(fields.at(1).toUInt());
+    status.phase = static_cast<deskflow::core::ClipboardTransferPhase>(fields.at(2).toInt());
+    status.done = fields.at(3).toULongLong();
+    status.total = fields.at(4).toULongLong();
+    status.failure = static_cast<deskflow::core::ClipboardTransferFailure>(fields.at(5).toInt());
+    Q_EMIT clipboardTransferChanged(status);
   }
 }
 

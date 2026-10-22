@@ -19,6 +19,7 @@
 #include "deskflow/ProtocolTypes.h"
 #include "deskflow/Screen.h"
 #include "deskflow/StreamChunker.h"
+#include "deskflow/ipc/ClipboardTransferReporter.h"
 #include "deskflow/ipc/CoreIpc.h"
 #include "deskflow/ipc/CoreIpcServer.h"
 #include "net/TCPSocket.h"
@@ -40,6 +41,7 @@
 #include <cstring>
 #include <ctime>
 
+using namespace deskflow::core;
 using namespace deskflow::server;
 
 //
@@ -564,6 +566,7 @@ void Server::switchScreen(BaseClientProxy *dst, int32_t x, int32_t y, bool forSc
       for (ClipboardID id = 0; id < kClipboardEnd; ++id) {
         // Hackity hackity hack
         if (isClipboardTooBig(m_clipboards[id].m_clipboard, m_maximumClipboardSize * 1024)) {
+          reportClipboardOversize(id, m_clipboards[id].m_clipboard);
           continue;
         }
         m_active->setClipboard(id, &m_clipboards[id].m_clipboard);
@@ -1361,6 +1364,14 @@ void Server::handleSwitchWaitTimeout()
 
 void Server::handleClientDisconnected(BaseClientProxy *client)
 {
+  if (client->hasActiveTransfer()) {
+    ClipboardTransferStatus status;
+    status.direction = ClipboardTransferDirection::Send;
+    status.phase = ClipboardTransferPhase::Failed;
+    status.failure = ClipboardTransferFailure::PeerDisconnected;
+    deskflow::core::ipc::ClipboardTransferReporter::instance().report(status);
+  }
+
   // client has disconnected.  it might be an old client or an
   // active client.  we don't care so just handle it both ways.
   removeActiveClient(client);
@@ -1510,6 +1521,29 @@ void Server::handleLockCursorToScreenEvent(const Event &event)
   }
 }
 
+void Server::reportClipboardOversize(ClipboardID id, const IClipboard &clipboard, uint64_t total) const
+{
+  if (total == 0 && clipboard.open(0)) {
+    // The bitmap is the payload users notice; fall back to the largest format.
+    for (uint32_t i = 0; i < static_cast<uint32_t>(IClipboard::Format::TotalFormats); ++i) {
+      const auto format = static_cast<IClipboard::Format>(i);
+      if (clipboard.has(format)) {
+        total = std::max<uint64_t>(total, clipboard.get(format).size());
+      }
+    }
+    clipboard.close();
+  }
+
+  ClipboardTransferStatus status;
+  status.direction = ClipboardTransferDirection::Send;
+  status.clipboardId = id;
+  status.phase = ClipboardTransferPhase::Failed;
+  status.done = total;
+  status.total = total;
+  status.failure = ClipboardTransferFailure::Oversize;
+  deskflow::core::ipc::ClipboardTransferReporter::instance().report(status);
+}
+
 void Server::onClipboardChanged(const BaseClientProxy *sender, ClipboardID id, uint32_t seqNum)
 {
   ClipboardInfo &clipboard = m_clipboards[id];
@@ -1528,12 +1562,14 @@ void Server::onClipboardChanged(const BaseClientProxy *sender, ClipboardID id, u
 
   if (isClipboardTooBig(clipboard.m_clipboard, m_maximumClipboardSize * 1024)) {
     LOG_INFO("ignored screen \"%s\" update of clipboard %d (format too large)", getName(sender).c_str(), id);
+    reportClipboardOversize(id, clipboard.m_clipboard);
     return;
   }
 
   std::string data = clipboard.m_clipboard.marshall();
   if (data.size() > m_maximumClipboardSize * 1024) {
     LOG_WARN("not sending clipboard data, exceeds limit: %i KB", m_maximumClipboardSize);
+    reportClipboardOversize(id, clipboard.m_clipboard, data.size());
     return;
   }
 

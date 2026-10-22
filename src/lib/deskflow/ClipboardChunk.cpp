@@ -114,6 +114,8 @@ TransferState ClipboardChunk::assemble(
     state.expectedSize = static_cast<size_t>(expected);
     state.active = true;
 
+    // Reject before reserving so a peer cannot make us allocate beyond the
+    // configured limit.
     if (state.expectedSize > maxDataSize) {
       if (skipOversized) {
         state.discarding = true;
@@ -127,6 +129,8 @@ TransferState ClipboardChunk::assemble(
       return Error;
     }
 
+    // The whole payload size is known up front; without this every chunk
+    // reallocates and copies all data received so far.
     if (skipOversized && state.expectedSize <= 16 * 1024 * 1024)
       dataCached.reserve(state.expectedSize);
     LOG_DEBUG("start receiving clipboard data, expected size=%zu", state.expectedSize);

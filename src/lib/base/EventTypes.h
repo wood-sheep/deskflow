@@ -48,6 +48,12 @@ enum class EventTypes : uint32_t
   /// A stream sends this event when \c read() will return with data.
   StreamInputReady,
 
+  /** An internal event posted by a message handler that stopped parsing early
+      (see TurnBudget) while complete messages are still buffered. It must not
+      go through the stream filter, which only forwards transitions to "ready".
+  */
+  StreamInputContinue,
+
   /** A stream sends this event when the output buffer has been flushed. If there have been no
       writes since the event was posted, calling \c shutdownOutput() or close() will not discard
       any data and \c flush() will return immediately.

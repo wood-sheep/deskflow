@@ -293,6 +293,7 @@ void MainWindow::connectSlots()
   connect(&m_coreProcess, &CoreProcess::retryIn, this, &MainWindow::updateTimeoutDelay);
   connect(&m_coreProcess, &CoreProcess::peerFingerprint, this, &MainWindow::handlePeerFingerprint);
   connect(&m_coreProcess, &CoreProcess::missingKeyboardLayouts, this, &MainWindow::handleMissingKeyboardLayouts);
+  connect(&m_coreProcess, &CoreProcess::clipboardTransferChanged, this, &MainWindow::clipboardTransferChanged);
 
   if (Settings::value(Settings::Gui::AutoStartCore).toBool()) {
     connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStopCore, &QAction::trigger, Qt::UniqueConnection);
@@ -930,6 +931,33 @@ void MainWindow::handleMissingKeyboardLayouts(const QString &layouts)
   if (checkBox->isChecked()) {
     Settings::setValue(Settings::Gui::IgnoreMissingKeyboardLayouts, true);
   }
+}
+
+void MainWindow::clipboardTransferChanged(const deskflow::core::ClipboardTransferStatus &status)
+{
+  m_statusBar->setClipboardTransfer(status);
+
+  using enum deskflow::core::ClipboardTransferPhase;
+  if (status.phase != Done && status.phase != Failed) {
+    return;
+  }
+
+  const auto text = StatusBar::clipboardTransferText(status);
+  const auto icon = status.phase == Failed ? QSystemTrayIcon::Warning : QSystemTrayIcon::Information;
+
+  // The tray icon doubles as the notification channel on every platform;
+  // the native helper covers macOS builds where tray messages are unavailable.
+  bool shown = false;
+  if (QSystemTrayIcon::supportsMessages()) {
+    m_trayIcon->showMessage(tr("Clipboard"), text, icon, 4000);
+    shown = true;
+  }
+
+#if defined(Q_OS_MACOS)
+  if (!shown) {
+    showOSXNotification(tr("Clipboard"), text);
+  }
+#endif
 }
 
 void MainWindow::handlePeerFingerprint(const QString &fingerprint)

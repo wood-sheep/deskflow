@@ -12,9 +12,11 @@
 
 class QPushButton;
 class QLabel;
+class QProgressBar;
 
 using ProcessState = deskflow::core::ProcessState;
 using ConnectionState = deskflow::core::ConnectionState;
+using ClipboardTransferStatus = deskflow::core::ClipboardTransferStatus;
 
 class StatusBar : public QStatusBar
 {
@@ -32,6 +34,12 @@ public:
   void setBtnFingerprintVisible(bool visible);
   void updateFound(const QString &version);
 
+  //! Shows clipboard transfer progress; only large transfers reach this point.
+  void setClipboardTransfer(const ClipboardTransferStatus &status);
+
+  //! Human readable form of a transfer state, shared with notifications.
+  static QString clipboardTransferText(const ClipboardTransferStatus &status);
+
 Q_SIGNALS:
   void requestShowMyFingerprints();
   void requestUpdateVersion();
@@ -42,10 +50,16 @@ protected:
 private:
   void updateText();
   void updateTimerLabel();
+  void hideClipboardTransfer();
+  static QString formatBytes(quint64 bytes);
+
   QPushButton *m_btnFingerprint = nullptr;
   QLabel *m_lblSecurityIcon = nullptr;
   QLabel *m_lblStatus = nullptr;
+  QLabel *m_lblClipboard = nullptr;
+  QProgressBar *m_progressClipboard = nullptr;
   QPushButton *m_btnUpdate = nullptr;
+  QTimer *m_clipboardHideTimer = nullptr;
   bool m_encrypted = false;
   QString m_securityLevel;
   int m_connectionInterval = -1;

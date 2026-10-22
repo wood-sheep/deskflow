@@ -10,6 +10,8 @@
 
 #include <QObject>
 
+#include <cstdint>
+
 namespace deskflow::client {
 Q_NAMESPACE
 enum class ErrorType : uint8_t
@@ -53,4 +55,43 @@ enum class ConnectionRefusal
 };
 Q_ENUM_NS(ConnectionRefusal)
 
+//! Direction of a clipboard transfer relative to the local core process.
+enum class ClipboardTransferDirection
+{
+  Send,
+  Receive
+};
+Q_ENUM_NS(ClipboardTransferDirection)
+
+enum class ClipboardTransferPhase
+{
+  Preparing, //!< reading/converting the clipboard, size may be unknown yet
+  Active,    //!< bytes are moving
+  Done,
+  Failed,
+  Cancelled
+};
+Q_ENUM_NS(ClipboardTransferPhase)
+
+enum class ClipboardTransferFailure
+{
+  None,
+  Oversize,
+  Corrupt,
+  PeerDisconnected
+};
+Q_ENUM_NS(ClipboardTransferFailure)
+
+struct ClipboardTransferStatus
+{
+  ClipboardTransferDirection direction = ClipboardTransferDirection::Send;
+  uint8_t clipboardId = 0;
+  ClipboardTransferPhase phase = ClipboardTransferPhase::Preparing;
+  quint64 done = 0;
+  quint64 total = 0;
+  ClipboardTransferFailure failure = ClipboardTransferFailure::None;
+};
+
 } // namespace deskflow::core
+
+Q_DECLARE_METATYPE(deskflow::core::ClipboardTransferStatus)

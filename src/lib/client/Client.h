@@ -19,6 +19,7 @@
 #include <climits>
 #include <string>
 
+
 class Event;
 class EventQueueTimer;
 namespace deskflow {
@@ -163,6 +164,22 @@ public:
   }
   size_t getMaximumClipboardReceiveSizeBytes() const;
 
+  //! Marks which clipboard a transfer belongs to before it starts moving bytes.
+  void setActiveTransfer(ClipboardID id, deskflow::core::ClipboardTransferDirection direction)
+  {
+    m_activeTransferId = id;
+    m_activeTransferDirection = direction;
+    m_hasActiveTransfer = true;
+  }
+  void clearActiveTransfer()
+  {
+    m_hasActiveTransfer = false;
+  }
+  bool hasActiveTransfer() const
+  {
+    return m_hasActiveTransfer;
+  }
+
   //@}
 
   // IScreen overrides
@@ -194,6 +211,11 @@ public:
 private:
   void saveRelativeRestorePosition();
   void sendClipboard(ClipboardID);
+  void reportTransfer(
+      deskflow::core::ClipboardTransferPhase phase, ClipboardID id, uint64_t done = 0, uint64_t total = 0,
+      deskflow::core::ClipboardTransferFailure failure = deskflow::core::ClipboardTransferFailure::None
+  );
+  void reportInterruptedTransfer();
   void sendEvent(deskflow::EventTypes);
   void sendConnectionFailedEvent(const char *msg);
   void setupConnecting();
@@ -236,6 +258,9 @@ private:
   bool m_sentClipboard[kClipboardEnd];
   IClipboard::Time m_timeClipboard[kClipboardEnd];
   std::string m_dataClipboard[kClipboardEnd];
+  bool m_hasActiveTransfer = false;
+  ClipboardID m_activeTransferId = 0;
+  deskflow::core::ClipboardTransferDirection m_activeTransferDirection = deskflow::core::ClipboardTransferDirection::Send;
   IEventQueue *m_events = nullptr;
   bool m_useSecureNetwork = false;
   bool m_enableClipboard = true;

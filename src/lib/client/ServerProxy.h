@@ -13,6 +13,11 @@
 #include "deskflow/ClipboardTypes.h"
 #include "deskflow/KeyTypes.h"
 #include "deskflow/KeyboardLayoutManager.h"
+#include "deskflow/StreamChunker.h"
+#include "deskflow/TurnBudget.h"
+
+#include <memory>
+
 
 class Client;
 class ClientInfo;
@@ -50,6 +55,9 @@ public:
   bool onGrabClipboard(ClipboardID);
   void onClipboardChanged(ClipboardID, const IClipboard *);
 
+  //! True while a clipboard payload is still being sent or received.
+  bool hasActiveTransfer() const;
+
   //@}
 
 protected:
@@ -80,6 +88,16 @@ private:
   void handleKeepAliveAlarm();
   void requestDisconnect(const char *message);
   void requestRefuseConnection(deskflow::core::ConnectionRefusal reason, const char *message);
+
+  // clipboard transfer progress
+  void reportClipboardReceive(
+      deskflow::core::ClipboardTransferPhase phase, ClipboardID id, uint64_t done, uint64_t total,
+      deskflow::core::ClipboardTransferFailure failure = deskflow::core::ClipboardTransferFailure::None
+  );
+  static void reportClipboardTransfer(
+      deskflow::core::ClipboardTransferDirection direction, deskflow::core::ClipboardTransferPhase phase, ClipboardID id, uint64_t done,
+      uint64_t total, deskflow::core::ClipboardTransferFailure failure = deskflow::core::ClipboardTransferFailure::None
+  );
 
   // message handlers
   void enter();
@@ -131,6 +149,9 @@ private:
   std::string m_serverLayout = "";
   std::string m_clipboardDataCached;
   ClipboardChunkAssemblyState m_clipboardChunkState;
+  std::shared_ptr<StreamChunker::Sender> m_clipboardSender;
+  bool m_sendActive = false;
+  TurnBudget m_turnBudget;
   bool m_isUserNotifiedAboutLayoutSyncError = false;
   deskflow::KeyboardLayoutManager m_layoutManager;
 };

@@ -51,6 +51,12 @@ public:
     return false;
   }
 
+  //! True while a clipboard payload is still being sent to or received from the client.
+  virtual bool hasActiveTransfer() const
+  {
+    return false;
+  }
+
   //@}
 
   // IScreen

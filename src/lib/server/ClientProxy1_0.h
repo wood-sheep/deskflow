@@ -10,6 +10,7 @@
 
 #include "deskflow/Clipboard.h"
 #include "deskflow/ProtocolTypes.h"
+#include "deskflow/TurnBudget.h"
 #include "server/ClientProxy.h"
 
 class Event;
@@ -101,4 +102,5 @@ private:
   EventQueueTimer *m_heartbeatTimer = nullptr;
   MessageParser m_parser = &ClientProxy1_0::parseHandshakeMessage;
   IEventQueue *m_events;
+  TurnBudget m_turnBudget;
 };

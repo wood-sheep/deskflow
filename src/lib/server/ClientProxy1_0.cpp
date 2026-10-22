@@ -26,6 +26,7 @@ ClientProxy1_0::ClientProxy1_0(const std::string &name, deskflow::IStream *strea
 {
   // install event handlers
   m_events->addHandler(EventTypes::StreamInputReady, stream->getEventTarget(), [this](const auto &) { handleData(); });
+  m_events->addHandler(EventTypes::StreamInputContinue, this, [this](const auto &) { handleData(); });
   m_events->addHandler(EventTypes::StreamOutputError, stream->getEventTarget(), [this](const auto &) {
     handleWriteError();
   });
@@ -63,6 +64,7 @@ void ClientProxy1_0::removeHandlers()
   using enum EventTypes;
   // uninstall event handlers
   m_events->removeHandler(StreamInputReady, getStream()->getEventTarget());
+  m_events->removeHandler(StreamInputContinue, this);
   m_events->removeHandler(StreamOutputError, getStream()->getEventTarget());
   m_events->removeHandler(StreamInputShutdown, getStream()->getEventTarget());
   m_events->removeHandler(StreamOutputShutdown, getStream()->getEventTarget());
@@ -107,7 +109,10 @@ void ClientProxy1_0::setHeartbeatRate(double, double alarm)
 
 void ClientProxy1_0::handleData()
 {
-  // handle messages until there are no more.  first read message code.
+  // handle messages until there are no more or this turn's budget is spent.
+  m_turnBudget.beginTurn();
+  bool budgetExhausted = false;
+
   uint8_t code[4];
   uint32_t n = getStream()->read(code, 4);
   while (n != 0) {
@@ -137,12 +142,24 @@ void ClientProxy1_0::handleData()
       return;
     }
 
+    if (!m_turnBudget.consume(getStream()->getSize())) {
+      budgetExhausted = true;
+      break;
+    }
+
     // next message
     n = getStream()->read(code, 4);
   }
 
   // restart heartbeat timer
   resetHeartbeatTimer();
+
+  // A large clipboard may arrive as many back-to-back messages; let input
+  // events run before parsing the remainder. Bypass the stream filter, which
+  // only forwards the transition to "ready" and would drop this continuation.
+  if (budgetExhausted && getStream()->isReady()) {
+    m_events->addEvent(Event(EventTypes::StreamInputContinue, getEventTarget()));
+  }
 }
 
 bool ClientProxy1_0::parseHandshakeMessage(const uint8_t *code)
