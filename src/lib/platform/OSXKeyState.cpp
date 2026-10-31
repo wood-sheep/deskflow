@@ -8,6 +8,7 @@
 #include "platform/OSXKeyState.h"
 #include "arch/Arch.h"
 #include "base/Log.h"
+#include "platform/OSXKeyboardLayoutCache.h"
 #include "platform/OSXMediaKeySupport.h"
 #include "platform/OSXUchrKeyResource.h"
 
@@ -195,6 +196,10 @@ OSXKeyState::OSXKeyState(
 
 void OSXKeyState::init()
 {
+  // Take the first keyboard layout snapshot and register the TIS observers
+  // before any key can be mapped.
+  OSXKeyboardLayoutCache::instance().start();
+
   m_deadKeyState = 0;
   m_shiftPressed = false;
   m_controlPressed = false;
@@ -292,19 +297,15 @@ KeyButton OSXKeyState::mapKeyFromEvent(KeyIDs &ids, KeyModifierMask *maskOut, CG
     return mapVirtualKeyToKeyButton(vkCode);
   }
 
-  // get keyboard info
-  AutoTISInputSourceRef currentKeyboardLayout(nullptr, CFRelease);
-  CFDataRef ref = nullptr;
-  {
-    std::lock_guard<std::mutex> lock(g_tisMutex);
-    currentKeyboardLayout = AutoTISInputSourceRef(TISCopyCurrentKeyboardLayoutInputSource(), CFRelease);
-    if (currentKeyboardLayout)
-      ref = (CFDataRef)TISGetInputSourceProperty(currentKeyboardLayout.get(), kTISPropertyUnicodeKeyLayoutData);
-  }
-
-  if (!currentKeyboardLayout) {
+  // get keyboard info.
+  // TIS must not be called from this thread (it would race the main thread
+  // inside macOS and abort the process), so read the cached snapshot. Holding
+  // the shared_ptr keeps the retained layout data alive for UCKeyTranslate.
+  const auto layoutSnapshot = OSXKeyboardLayoutCache::instance().snapshot();
+  if (layoutSnapshot == nullptr || !layoutSnapshot->hasCurrentLayout) {
     return kKeyNone;
   }
+  CFDataRef ref = layoutSnapshot->currentLayoutData;
 
   // get the event modifiers and remove the command and control
   // keys.  note if we used them though.
@@ -433,18 +434,12 @@ KeyModifierMask OSXKeyState::pollActiveModifiers() const
 
 int32_t OSXKeyState::pollActiveGroup() const
 {
-  AutoTISInputSourceRef keyboardLayout(nullptr, CFRelease);
-  CFDataRef id = nullptr;
-  {
-    std::lock_guard<std::mutex> lock(g_tisMutex);
-    keyboardLayout = AutoTISInputSourceRef(TISCopyCurrentKeyboardLayoutInputSource(), CFRelease);
-    if (keyboardLayout)
-      id = (CFDataRef)TISGetInputSourceProperty(keyboardLayout.get(), kTISPropertyInputSourceID);
-  }
-
-  GroupMap::const_iterator i = m_groupMap.find(id);
-  if (i != m_groupMap.end()) {
-    return i->second;
+  const auto layoutSnapshot = OSXKeyboardLayoutCache::instance().snapshot();
+  if (layoutSnapshot != nullptr) {
+    GroupMap::const_iterator i = m_groupMap.find(layoutSnapshot->currentId);
+    if (i != m_groupMap.end()) {
+      return i->second;
+    }
   }
 
   LOG_WARN("can't get the active group, use the first group instead");
@@ -468,20 +463,18 @@ void OSXKeyState::pollPressedKeys(KeyButtonSet &pressedKeys) const
 
 void OSXKeyState::getKeyMap(deskflow::KeyMap &keyMap)
 {
-  // update keyboard groups
-  int32_t numGroups{0};
-  if (getGroups(m_groups)) {
-    m_groupMap.clear();
-    numGroups = CFArrayGetCount(m_groups.get());
-    for (int32_t g = 0; g < numGroups; ++g) {
-      TISInputSourceRef keyboardLayout = (TISInputSourceRef)CFArrayGetValueAtIndex(m_groups.get(), g);
-      CFDataRef id = nullptr;
-      {
-        std::lock_guard<std::mutex> lock(g_tisMutex);
-        id = (CFDataRef)TISGetInputSourceProperty(keyboardLayout, kTISPropertyInputSourceID);
-      }
-      m_groupMap[id] = g;
-    }
+  // The installed layouts come from the TIS snapshot so this method can run on
+  // the core thread without calling TIS.
+  const auto layoutSnapshot = OSXKeyboardLayoutCache::instance().snapshot();
+  if (layoutSnapshot == nullptr) {
+    LOG_WARN("can't get keyboard layouts");
+    return;
+  }
+
+  const auto numGroups = static_cast<int32_t>(layoutSnapshot->groups.size());
+  m_groupMap.clear();
+  for (int32_t g = 0; g < numGroups; ++g) {
+    m_groupMap[layoutSnapshot->groups[static_cast<size_t>(g)].id] = g;
   }
 
   uint32_t keyboardType = LMGetKbdType();
@@ -489,23 +482,11 @@ void OSXKeyState::getKeyMap(deskflow::KeyMap &keyMap)
     // add special keys
     getKeyMapForSpecialKeys(keyMap, g);
 
-    const void *resource;
-    bool layoutValid = false;
-
     // add regular keys
     // try uchr resource first
-    TISInputSourceRef keyboardLayout = (TISInputSourceRef)CFArrayGetValueAtIndex(m_groups.get(), g);
-    CFDataRef resourceRef = nullptr;
-    {
-      std::lock_guard<std::mutex> lock(g_tisMutex);
-      resourceRef = (CFDataRef)TISGetInputSourceProperty(keyboardLayout, kTISPropertyUnicodeKeyLayoutData);
-    }
-
-    layoutValid = resourceRef != nullptr;
-    if (layoutValid)
-      resource = CFDataGetBytePtr(resourceRef);
-
-    if (layoutValid) {
+    const auto &group = layoutSnapshot->groups[static_cast<size_t>(g)];
+    if (group.layoutData != nullptr) {
+      const auto *resource = CFDataGetBytePtr(group.layoutData);
       OSXUchrKeyResource uchr(resource, keyboardType);
       if (uchr.isValid()) {
         LOG_VERBOSE("using uchr resource for group %d", g);
@@ -865,55 +846,26 @@ void OSXKeyState::handleModifierKey(void *target, uint32_t virtualKey, KeyID id,
   sendKeyEvent(target, down, false, id, newMask, 0, button);
 }
 
-bool OSXKeyState::getGroups(AutoCFArray &groups) const
-{
-  // get number of layouts
-  CFStringRef keys[] = {kTISPropertyInputSourceCategory};
-  CFStringRef values[] = {kTISCategoryKeyboardInputSource};
-  AutoCFDictionary dict(
-      CFDictionaryCreate(nullptr, (const void **)keys, (const void **)values, 1, nullptr, nullptr), CFRelease
-  );
-  AutoCFArray kbds(nullptr, CFRelease);
-  {
-    std::lock_guard<std::mutex> lock(g_tisMutex);
-    kbds = AutoCFArray(TISCreateInputSourceList(dict.get(), false), CFRelease);
-  }
-
-  if (CFArrayGetCount(kbds.get()) > 0) {
-    groups = std::move(kbds);
-  } else {
-    LOG_VERBOSE("can't get keyboard layouts");
-    return false;
-  }
-
-  return true;
-}
-
 void OSXKeyState::setGroup(int32_t group)
 {
-  TISInputSourceRef keyboardLayout = (TISInputSourceRef)CFArrayGetValueAtIndex(m_groups.get(), group);
-  if (!keyboardLayout) {
+  // TISSelectInputSource must run on the main thread, like every other TIS
+  // call in this process.
+  auto &cache = OSXKeyboardLayoutCache::instance();
+  const auto layoutSnapshot = cache.snapshot();
+  if (group < 0 || layoutSnapshot == nullptr ||
+      static_cast<size_t>(group) >= layoutSnapshot->groups.size()) {
     LOG_WARN("needed keyboard layout is null");
     return;
   }
-  CFBooleanRef canBeSetted = nullptr;
-  {
-    std::lock_guard<std::mutex> lock(g_tisMutex);
-    AutoTISInputSourceRef source(TISCopyCurrentKeyboardInputSource(), CFRelease);
-    if (source)
-      canBeSetted = (CFBooleanRef)TISGetInputSourceProperty(source.get(), kTISPropertyInputSourceIsEnableCapable);
-  }
-  if (!canBeSetted) {
-    LOG_WARN("needed keyboard layout is disabled for programmatically selection");
-    return;
-  }
 
-  {
-    std::lock_guard<std::mutex> lock(g_tisMutex);
-    if (TISSelectInputSource(keyboardLayout) != noErr) {
-      LOG_WARN("failed to set needed keyboard layout");
+  cache.runOnMainThread([&cache, &layoutSnapshot, group] {
+    if (!cache.selectGroup(layoutSnapshot, static_cast<size_t>(group))) {
+      return;
     }
-  }
+    // Make the new layout visible to the key mapping right away instead of
+    // waiting for the distributed notification.
+    cache.refresh();
+  });
 
   LOG_VERBOSE("keyboard layout change to %d", group);
 
