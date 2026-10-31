@@ -9,9 +9,13 @@ set(OSX_BUNDLE ${BUILD_OSX_BUNDLE})
 set(OS_STRING "macos-${BUILD_ARCHITECTURE}")
 
 if (OSX_BUNDLE)
+  # macdeployqt only rewrites the main executable by default. deskflow-core is a
+  # second Mach-O inside the bundle and must be processed too, otherwise it
+  # keeps absolute Homebrew Qt paths and the process loads two Qt copies.
   install(CODE "execute_process(COMMAND
     ${DEPLOYQT}
     \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\"
+    -executable=\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app/Contents/MacOS/deskflow-core
     -timestamp -codesign=-
   )")
   set(CPACK_PACKAGE_ICON "${MY_DIR}/dmg-volume.icns")
